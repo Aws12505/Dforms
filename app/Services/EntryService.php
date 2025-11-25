@@ -3,11 +3,17 @@
 namespace App\Services;
 
 use App\Models\Entry;
-use App\Models\FormVersion;
 use Illuminate\Support\Facades\DB;
 
 class EntryService
 {
+    protected EntryFilterService $filterService;
+    
+    public function __construct(EntryFilterService $filterService)
+    {
+        $this->filterService = $filterService;
+    }
+    
     /**
      * Get paginated and filtered entries list for a form version
      */
@@ -15,7 +21,7 @@ class EntryService
     {
         $query = Entry::with(['currentStage', 'createdByUser', 'entryValues.field'])
             ->where('form_version_id', $filters['form_version_id']);
-
+        
         // Filter by date range (submission or latest update, whichever is latest)
         if (!empty($filters['date_from'])) {
             $query->where(function ($q) use ($filters) {
@@ -23,29 +29,24 @@ class EntryService
                   ->orWhereDate('updated_at', '>=', $filters['date_from']);
             });
         }
-
+        
         if (!empty($filters['date_to'])) {
             $query->where(function ($q) use ($filters) {
                 $q->whereDate('created_at', '<=', $filters['date_to'])
                   ->orWhereDate('updated_at', '<=', $filters['date_to']);
             });
         }
-
-        // Field-type-based filters (implementation depends on field types and their filter definitions)
+        
+        // Apply field-type-based filters
         if (!empty($filters['field_filters'])) {
-            foreach ($filters['field_filters'] as $fieldId => $filterValue) {
-                $query->whereHas('entryValues', function ($q) use ($fieldId, $filterValue) {
-                    $q->where('field_id', $fieldId)
-                      ->where('value', 'like', '%' . $filterValue . '%');
-                });
-            }
+            $query = $this->filterService->applyFieldFilters($query, $filters['field_filters']);
         }
-
+        
         // Always sort by latest (updated_at desc)
         $query->orderBy('updated_at', 'desc');
-
+        
         $perPage = $filters['per_page'] ?? 15;
-
+        
         return $query->paginate($perPage);
     }
 

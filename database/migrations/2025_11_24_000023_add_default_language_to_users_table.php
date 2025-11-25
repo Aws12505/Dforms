@@ -9,7 +9,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->foreignId('default_language_id')->nullable()->constrained('languages');
+            $table->foreignId('default_language_id')->nullable()->constrained('languages')->nullOnDelete();
         });
     }
 

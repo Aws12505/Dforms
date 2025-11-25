@@ -36,14 +36,7 @@ class SuperadminPreProductionSeeder extends Seeder
         $languages = [
             ['code' => 'en', 'name' => 'English', 'is_default' => true],
             ['code' => 'ar', 'name' => 'Arabic', 'is_default' => false],
-            ['code' => 'fr', 'name' => 'French', 'is_default' => false],
             ['code' => 'es', 'name' => 'Spanish', 'is_default' => false],
-            ['code' => 'de', 'name' => 'German', 'is_default' => false],
-            ['code' => 'zh', 'name' => 'Chinese', 'is_default' => false],
-            ['code' => 'ja', 'name' => 'Japanese', 'is_default' => false],
-            ['code' => 'ru', 'name' => 'Russian', 'is_default' => false],
-            ['code' => 'pt', 'name' => 'Portuguese', 'is_default' => false],
-            ['code' => 'it', 'name' => 'Italian', 'is_default' => false],
         ];
 
         foreach ($languages as $language) {
@@ -75,7 +68,7 @@ class SuperadminPreProductionSeeder extends Seeder
             'Checkbox',
             'Radio Button',
             'Dropdown Select',
-            'Multi-Select',
+            'Multi_Select',
             'File Upload',
             'Image Upload',
             'Video Upload',
@@ -344,8 +337,6 @@ class SuperadminPreProductionSeeder extends Seeder
                 DB::table('input_rule_field_types')->insert([
                     'input_rule_id' => $ruleId,
                     'field_type_id' => $fieldTypeId,
-                    'created_at' => Carbon::now(),
-                    'updated_at' => Carbon::now(),
                 ]);
             }
         }
@@ -389,37 +380,6 @@ class SuperadminPreProductionSeeder extends Seeder
                 'is_public' => true,
             ],
             [
-                'name' => 'Send SMS',
-                'props_description' => json_encode([
-                    'sms_content' => 'Content of the SMS message (max 160 characters)',
-                    'receivers_users' => 'Array of user IDs to send SMS (uses their phone numbers)',
-                    'receivers_phone_numbers' => 'Array of specific phone numbers',
-                    'sender_name' => 'Name to display as sender',
-                ]),
-                'is_public' => true,
-            ],
-            [
-                'name' => 'Create Task',
-                'props_description' => json_encode([
-                    'task_title' => 'Title of the task',
-                    'task_description' => 'Description of the task (supports variables)',
-                    'task_due_date' => 'Due date for the task',
-                    'task_priority' => 'Priority: low, medium, high, urgent',
-                    'assigned_users' => 'Array of user IDs to assign the task to',
-                    'assigned_roles' => 'Array of role IDs - task assigned to users with these roles',
-                ]),
-                'is_public' => true,
-            ],
-            [
-                'name' => 'Update Database Record',
-                'props_description' => json_encode([
-                    'table_name' => 'Name of the database table to update',
-                    'record_id_field' => 'Field in form that contains the record ID',
-                    'fields_to_update' => 'Map of database fields to form field values',
-                ]),
-                'is_public' => false, // Advanced feature
-            ],
-            [
                 'name' => 'Call Webhook',
                 'props_description' => json_encode([
                     'webhook_url' => 'URL to send the webhook request to',
@@ -427,66 +387,6 @@ class SuperadminPreProductionSeeder extends Seeder
                     'webhook_headers' => 'Custom headers to include',
                     'webhook_payload' => 'Data to send (supports variables)',
                     'webhook_timeout' => 'Request timeout in seconds',
-                ]),
-                'is_public' => true,
-            ],
-            [
-                'name' => 'Generate PDF',
-                'props_description' => json_encode([
-                    'pdf_template' => 'Template to use for PDF generation',
-                    'pdf_filename' => 'Name of the generated PDF file',
-                    'attach_to_email' => 'Whether to attach PDF to any email actions',
-                    'save_to_storage' => 'Whether to save PDF to storage',
-                ]),
-                'is_public' => true,
-            ],
-            [
-                'name' => 'Log Activity',
-                'props_description' => json_encode([
-                    'log_level' => 'Level: debug, info, notice, warning, error, critical',
-                    'log_message' => 'Message to log (supports variables)',
-                    'log_context' => 'Additional context data',
-                ]),
-                'is_public' => false,
-            ],
-            [
-                'name' => 'Send Slack Message',
-                'props_description' => json_encode([
-                    'slack_channel' => 'Slack channel or webhook URL',
-                    'slack_message' => 'Message content (supports variables)',
-                    'slack_username' => 'Bot username to display',
-                    'slack_icon' => 'Icon emoji or URL',
-                ]),
-                'is_public' => true,
-            ],
-            [
-                'name' => 'Send Teams Message',
-                'props_description' => json_encode([
-                    'teams_webhook_url' => 'Microsoft Teams webhook URL',
-                    'teams_title' => 'Message title',
-                    'teams_message' => 'Message content (supports variables)',
-                    'teams_color' => 'Theme color (hex)',
-                ]),
-                'is_public' => true,
-            ],
-            [
-                'name' => 'Update User Permissions',
-                'props_description' => json_encode([
-                    'user_id_field' => 'Field in form that contains user ID',
-                    'permissions_to_add' => 'Array of permission IDs to grant',
-                    'permissions_to_remove' => 'Array of permission IDs to revoke',
-                    'roles_to_add' => 'Array of role IDs to assign',
-                    'roles_to_remove' => 'Array of role IDs to unassign',
-                ]),
-                'is_public' => false,
-            ],
-            [
-                'name' => 'Schedule Follow-up',
-                'props_description' => json_encode([
-                    'follow_up_date' => 'Date/time for follow-up',
-                    'follow_up_action' => 'Action to perform at follow-up time',
-                    'follow_up_message' => 'Message/reminder content',
-                    'assigned_users' => 'Users to notify for follow-up',
                 ]),
                 'is_public' => true,
             ],
