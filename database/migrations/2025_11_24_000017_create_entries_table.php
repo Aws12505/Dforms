@@ -16,7 +16,7 @@ return new class extends Migration
             $table->uuid('public_identifier')->unique();
             $table->boolean('is_complete')->default(false);
             $table->boolean('is_considered')->default(false);
-            $table->foreignId('created_by_user_id')->constrained('users');
+            $table->foreignId('created_by_user_id')->nullable()->constrained('users')->onDelete(null);
             $table->timestamps();
         });
     }

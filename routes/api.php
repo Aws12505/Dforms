@@ -1,7 +1,9 @@
 <?php
 use Illuminate\Support\Facades\Route;
 
-Route::prefix(prefix: 'languages')->group(function () {
+Route::middleware('auth.verify')->group(function (){
+
+Route::prefix('languages')->group(function () {
 require __DIR__.'/V1/Language.php';
 });
 
@@ -29,6 +31,8 @@ Route::prefix('forms')->group(function () {
 require __DIR__.'/V1/Form.php';
 });
 
+require __DIR__.'/V1/FormVersion.php';
+
 Route::prefix('entries')->group(function () {
 require __DIR__.'/V1/Entry.php';
 });
@@ -39,6 +43,8 @@ require __DIR__.'/V1/Translation.php';
 
 Route::prefix('user/language')->group(function () {
 require __DIR__.'/V1/UserLanguage.php';
+});
+
 });
 
 Route::prefix('enduser')->group(function () {
