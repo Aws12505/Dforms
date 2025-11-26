@@ -14,17 +14,17 @@ class GetFormsListRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => 'sometimes|string|max:255',
-            'date_from' => 'sometimes|date',
-            'date_to' => 'sometimes|date|after_or_equal:date_from',
-            'status' => 'sometimes|in:all,drafted,published,archived',
-            'category_filter_type' => 'sometimes|in:all,specific,group,without',
-            'category_ids' => 'sometimes|array',
+            'name' => 'nullable|string|max:255',
+            'date_from' => 'nullable|date',
+            'date_to' => 'nullable|date|after_or_equal:date_from',
+            'status' => 'nullable|in:all,drafted,published,archived',
+            'category_filter_type' => 'nullable|in:all,specific,group,without',
+            'category_ids' => 'nullable|array',
             'category_ids.*' => 'integer|exists:categories,id',
-            'sort_by' => 'sometimes|in:latest_submission,publish_time,creation_time',
-            'sort_direction' => 'sometimes|in:asc,desc',
-            'page' => 'sometimes|integer|min:1',
-            'per_page' => 'sometimes|integer|min:1|max:100',
+            'sort_by' => 'nullable|in:latest_submission,publish_time,creation_time',
+            'sort_direction' => 'nullable|in:asc,desc',
+            'page' => 'nullable|integer|min:1',
+            'per_page' => 'nullable|integer|min:1|max:100',
         ];
     }
 
