@@ -121,7 +121,6 @@ class FormService
                 'form_version_id' => $formVersion->id,
                 'name' => 'initial stage',
                 'is_initial' => true,
-                'order' => 0,
             ]);
 
             // 4. Auto-create first section in initial stage

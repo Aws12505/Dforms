@@ -13,6 +13,7 @@ return new class extends Migration
             $table->foreignId('stage_id')->constrained('stages')->onDelete('cascade');
             $table->string('name', 255);
             $table->text('visibility_condition')->nullable();
+            $table->integer('order');
             $table->timestamps();
         });
     }

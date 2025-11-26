@@ -12,6 +12,7 @@ class Section extends Model
         'stage_id',
         'name',
         'visibility_condition',
+        'order'
     ];
 
     protected $casts = [

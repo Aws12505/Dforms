@@ -45,7 +45,6 @@ class FormVersionService
                 // COPY from current version: Clone all stages, sections, and fields
                 $stages = Stage::where('form_version_id', $currentVersion->id)
                     ->with(['sections.fields'])
-                    ->orderBy('order')
                     ->get();
 
                 foreach ($stages as $stage) {
@@ -53,7 +52,6 @@ class FormVersionService
                         'form_version_id' => $newVersion->id,
                         'name' => $stage->name,
                         'is_initial' => $stage->is_initial,
-                        'order' => $stage->order,
                     ]);
 
                     foreach ($stage->sections as $section) {
@@ -83,7 +81,6 @@ class FormVersionService
                     'form_version_id' => $newVersion->id,
                     'name' => 'initial stage',
                     'is_initial' => true,
-                    'order' => 0,
                 ]);
 
                 Section::create([
