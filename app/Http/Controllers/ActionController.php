@@ -3,13 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Services\ActionService;
-use App\Http\Requests\Action\StoreActionRequest;
-use App\Http\Requests\Action\UpdateActionRequest;
+use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
 class ActionController extends Controller
 {
-    protected ActionService $actionService;
+    protected $actionService;
 
     public function __construct(ActionService $actionService)
     {
@@ -28,12 +27,11 @@ class ActionController extends Controller
             return response()->json([
                 'success' => true,
                 'data' => $actions,
-            ], 200);
+            ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to retrieve actions.',
-                'error' => $e->getMessage(),
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -42,22 +40,27 @@ class ActionController extends Controller
      * Create a new action
      * POST /api/actions
      */
-    public function store(StoreActionRequest $request): JsonResponse
+    public function store(Request $request): JsonResponse
     {
         try {
-            $action = $this->actionService->createAction($request->validated());
+            $validated = $request->validate([
+                'name' => 'required|string|max:100',
+                'props_description' => 'required|string',
+                'is_public' => 'boolean',
+            ]);
+
+            $action = $this->actionService->createAction($validated);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Action created successfully.',
                 'data' => $action,
+                'message' => 'Action created successfully',
             ], 201);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to create action.',
-                'error' => $e->getMessage(),
-            ], 500);
+                'message' => $e->getMessage(),
+            ], 400);
         }
     }
 
@@ -73,36 +76,40 @@ class ActionController extends Controller
             return response()->json([
                 'success' => true,
                 'data' => $action,
-            ], 200);
+            ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Action not found.',
-                'error' => $e->getMessage(),
+                'message' => $e->getMessage(),
             ], 404);
         }
     }
 
     /**
-     * Update an existing action
+     * Update an action
      * PUT /api/actions/{id}
      */
-    public function update(UpdateActionRequest $request, int $id): JsonResponse
+    public function update(Request $request, int $id): JsonResponse
     {
         try {
-            $action = $this->actionService->updateAction($id, $request->validated());
+            $validated = $request->validate([
+                'name' => 'sometimes|string|max:100',
+                'props_description' => 'sometimes|string',
+                'is_public' => 'sometimes|boolean',
+            ]);
+
+            $action = $this->actionService->updateAction($id, $validated);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Action updated successfully.',
                 'data' => $action,
-            ], 200);
+                'message' => 'Action updated successfully',
+            ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to update action.',
-                'error' => $e->getMessage(),
-            ], 500);
+                'message' => $e->getMessage(),
+            ], 400);
         }
     }
 
@@ -117,14 +124,13 @@ class ActionController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Action deleted successfully.',
-            ], 200);
+                'message' => 'Action deleted successfully',
+            ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to delete action.',
-                'error' => $e->getMessage(),
-            ], 500);
+                'message' => $e->getMessage(),
+            ], 400);
         }
     }
 }

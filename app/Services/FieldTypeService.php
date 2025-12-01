@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\FieldType;
+use Illuminate\Support\Facades\DB;
 
 class FieldTypeService
 {
@@ -15,11 +16,45 @@ class FieldTypeService
     }
 
     /**
+     * Get all field types with their compatible input rules
+     */
+    public function getAllFieldTypesWithRules()
+    {
+        return FieldType::with(['inputRules' => function($query) {
+            $query->where('is_public', true)->orderBy('name', 'asc');
+        }])
+        ->orderBy('name', 'asc')
+        ->get()
+        ->map(function($fieldType) {
+            return [
+                'id' => $fieldType->id,
+                'name' => $fieldType->name,
+                'compatible_rules' => $fieldType->inputRules->map(function($rule) {
+                    return [
+                        'id' => $rule->id,
+                        'name' => $rule->name,
+                        'description' => $rule->description,
+                    ];
+                }),
+            ];
+        });
+    }
+
+    /**
      * Create a new field type
      */
     public function createFieldType(array $data)
     {
-        return FieldType::create($data);
+        DB::beginTransaction();
+        try {
+            $fieldType = FieldType::create($data);
+
+            DB::commit();
+            return $fieldType;
+        } catch (\Exception $e) {
+            DB::rollBack();
+            throw $e;
+        }
     }
 
     /**
@@ -27,7 +62,7 @@ class FieldTypeService
      */
     public function getFieldTypeById(int $id)
     {
-        return FieldType::findOrFail($id);
+        return FieldType::with('inputRules')->findOrFail($id);
     }
 
     /**
@@ -37,7 +72,7 @@ class FieldTypeService
     {
         $fieldType = FieldType::findOrFail($id);
         $fieldType->update($data);
-        return $fieldType;
+        return $fieldType->load('inputRules');
     }
 
     /**
@@ -45,29 +80,30 @@ class FieldTypeService
      */
     public function deleteFieldType(int $id)
     {
-        $fieldType = FieldType::findOrFail($id);
+        DB::beginTransaction();
+        try {
+            $fieldType = FieldType::findOrFail($id);
 
-        // Check if field type is being used by any fields
-        $fieldsCount = $fieldType->fields()->count();
-        if ($fieldsCount > 0) {
-            throw new \Exception("Cannot delete this field type. It is currently used by {$fieldsCount} field(s) in forms.");
-        }
+            // Check if field type is being used by any fields
+            $usageCount = $fieldType->fields()->count();
 
-        // Check if field type has input rules associated
-        $rulesCount = $fieldType->inputRules()->count();
-        if ($rulesCount > 0) {
-            // Detach all input rules before deletion
+            if ($usageCount > 0) {
+                throw new \Exception("Cannot delete this field type. It is currently used by {$usageCount} fields in forms.");
+            }
+
+            // Detach all input rule associations
             $fieldType->inputRules()->detach();
+
+            // Delete associated filters
+            $fieldType->filters()->delete();
+
+            $fieldType->delete();
+
+            DB::commit();
+            return true;
+        } catch (\Exception $e) {
+            DB::rollBack();
+            throw $e;
         }
-
-        // Check if field type has filters
-        $filtersCount = $fieldType->fieldTypeFilters()->count();
-        if ($filtersCount > 0) {
-            throw new \Exception("Cannot delete this field type. It has {$filtersCount} filter(s) associated with it. Please delete the filters first.");
-        }
-
-        $fieldType->delete();
-
-        return true;
     }
 }

@@ -3,13 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Services\FieldTypeFilterService;
-use App\Http\Requests\FieldTypeFilter\StoreFieldTypeFilterRequest;
-use App\Http\Requests\FieldTypeFilter\UpdateFieldTypeFilterRequest;
+use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
 class FieldTypeFilterController extends Controller
 {
-    protected FieldTypeFilterService $fieldTypeFilterService;
+    protected $fieldTypeFilterService;
 
     public function __construct(FieldTypeFilterService $fieldTypeFilterService)
     {
@@ -23,17 +22,16 @@ class FieldTypeFilterController extends Controller
     public function index(): JsonResponse
     {
         try {
-            $fieldTypeFilters = $this->fieldTypeFilterService->getAllFieldTypeFilters();
+            $filters = $this->fieldTypeFilterService->getAllFieldTypeFilters();
 
             return response()->json([
                 'success' => true,
-                'data' => $fieldTypeFilters,
-            ], 200);
+                'data' => $filters,
+            ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to retrieve field type filters.',
-                'error' => $e->getMessage(),
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -42,22 +40,26 @@ class FieldTypeFilterController extends Controller
      * Create a new field type filter
      * POST /api/field-type-filters
      */
-    public function store(StoreFieldTypeFilterRequest $request): JsonResponse
+    public function store(Request $request): JsonResponse
     {
         try {
-            $fieldTypeFilter = $this->fieldTypeFilterService->createFieldTypeFilter($request->validated());
+            $validated = $request->validate([
+                'field_type_id' => 'required|exists:field_types,id',
+                'filter_method_description' => 'required|string',
+            ]);
+
+            $filter = $this->fieldTypeFilterService->createFieldTypeFilter($validated);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Field type filter created successfully.',
-                'data' => $fieldTypeFilter->load('fieldType'),
+                'data' => $filter,
+                'message' => 'Field type filter created successfully',
             ], 201);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to create field type filter.',
-                'error' => $e->getMessage(),
-            ], 500);
+                'message' => $e->getMessage(),
+            ], 400);
         }
     }
 
@@ -68,41 +70,44 @@ class FieldTypeFilterController extends Controller
     public function show(int $id): JsonResponse
     {
         try {
-            $fieldTypeFilter = $this->fieldTypeFilterService->getFieldTypeFilterById($id);
+            $filter = $this->fieldTypeFilterService->getFieldTypeFilterById($id);
 
             return response()->json([
                 'success' => true,
-                'data' => $fieldTypeFilter,
-            ], 200);
+                'data' => $filter,
+            ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Field type filter not found.',
-                'error' => $e->getMessage(),
+                'message' => $e->getMessage(),
             ], 404);
         }
     }
 
     /**
-     * Update an existing field type filter
+     * Update a field type filter
      * PUT /api/field-type-filters/{id}
      */
-    public function update(UpdateFieldTypeFilterRequest $request, int $id): JsonResponse
+    public function update(Request $request, int $id): JsonResponse
     {
         try {
-            $fieldTypeFilter = $this->fieldTypeFilterService->updateFieldTypeFilter($id, $request->validated());
+            $validated = $request->validate([
+                'field_type_id' => 'sometimes|exists:field_types,id',
+                'filter_method_description' => 'sometimes|string',
+            ]);
+
+            $filter = $this->fieldTypeFilterService->updateFieldTypeFilter($id, $validated);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Field type filter updated successfully.',
-                'data' => $fieldTypeFilter,
-            ], 200);
+                'data' => $filter,
+                'message' => 'Field type filter updated successfully',
+            ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to update field type filter.',
-                'error' => $e->getMessage(),
-            ], 500);
+                'message' => $e->getMessage(),
+            ], 400);
         }
     }
 
@@ -117,14 +122,13 @@ class FieldTypeFilterController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Field type filter deleted successfully.',
-            ], 200);
+                'message' => 'Field type filter deleted successfully',
+            ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to delete field type filter.',
-                'error' => $e->getMessage(),
-            ], 500);
+                'message' => $e->getMessage(),
+            ], 400);
         }
     }
 }

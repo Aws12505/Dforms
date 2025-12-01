@@ -84,7 +84,7 @@ class FieldValidationService
     /**
      * Evaluate a condition against provided values
      */
-    private function evaluateCondition($condition, array $values): bool
+    public function evaluateCondition($condition, array $values): bool
     {
         if (empty($condition)) {
             return true;
@@ -140,7 +140,7 @@ class FieldValidationService
     /**
      * Validate a single rule against a value
      */
-    private function validateSingleRule($value, string $fieldType, string $ruleName, array $ruleProps): array
+    public function validateSingleRule($value, string $fieldType, string $ruleName, array $ruleProps): array
     {
         $errors = [];
         

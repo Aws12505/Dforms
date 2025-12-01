@@ -3,13 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Services\FieldTypeService;
-use App\Http\Requests\FieldType\StoreFieldTypeRequest;
-use App\Http\Requests\FieldType\UpdateFieldTypeRequest;
+use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
 class FieldTypeController extends Controller
 {
-    protected FieldTypeService $fieldTypeService;
+    protected $fieldTypeService;
 
     public function __construct(FieldTypeService $fieldTypeService)
     {
@@ -17,23 +16,22 @@ class FieldTypeController extends Controller
     }
 
     /**
-     * Get all field types
+     * Get all field types with their compatible input rules
      * GET /api/field-types
      */
     public function index(): JsonResponse
     {
         try {
-            $fieldTypes = $this->fieldTypeService->getAllFieldTypes();
+            $fieldTypes = $this->fieldTypeService->getAllFieldTypesWithRules();
 
             return response()->json([
                 'success' => true,
                 'data' => $fieldTypes,
-            ], 200);
+            ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to retrieve field types.',
-                'error' => $e->getMessage(),
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -42,22 +40,25 @@ class FieldTypeController extends Controller
      * Create a new field type
      * POST /api/field-types
      */
-    public function store(StoreFieldTypeRequest $request): JsonResponse
+    public function store(Request $request): JsonResponse
     {
         try {
-            $fieldType = $this->fieldTypeService->createFieldType($request->validated());
+            $validated = $request->validate([
+                'name' => 'required|string|max:100|unique:field_types,name',
+            ]);
+
+            $fieldType = $this->fieldTypeService->createFieldType($validated);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Field type created successfully.',
                 'data' => $fieldType,
+                'message' => 'Field type created successfully',
             ], 201);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to create field type.',
-                'error' => $e->getMessage(),
-            ], 500);
+                'message' => $e->getMessage(),
+            ], 400);
         }
     }
 
@@ -73,36 +74,38 @@ class FieldTypeController extends Controller
             return response()->json([
                 'success' => true,
                 'data' => $fieldType,
-            ], 200);
+            ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Field type not found.',
-                'error' => $e->getMessage(),
+                'message' => $e->getMessage(),
             ], 404);
         }
     }
 
     /**
-     * Update an existing field type
+     * Update a field type
      * PUT /api/field-types/{id}
      */
-    public function update(UpdateFieldTypeRequest $request, int $id): JsonResponse
+    public function update(Request $request, int $id): JsonResponse
     {
         try {
-            $fieldType = $this->fieldTypeService->updateFieldType($id, $request->validated());
+            $validated = $request->validate([
+                'name' => 'sometimes|string|max:100|unique:field_types,name,' . $id,
+            ]);
+
+            $fieldType = $this->fieldTypeService->updateFieldType($id, $validated);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Field type updated successfully.',
                 'data' => $fieldType,
-            ], 200);
+                'message' => 'Field type updated successfully',
+            ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to update field type.',
-                'error' => $e->getMessage(),
-            ], 500);
+                'message' => $e->getMessage(),
+            ], 400);
         }
     }
 
@@ -117,14 +120,13 @@ class FieldTypeController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Field type deleted successfully.',
-            ], 200);
+                'message' => 'Field type deleted successfully',
+            ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to delete field type.',
-                'error' => $e->getMessage(),
-            ], 500);
+                'message' => $e->getMessage(),
+            ], 400);
         }
     }
 }
