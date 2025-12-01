@@ -69,8 +69,8 @@ class EndUserFormService
 
         $formVersion = FormVersion::with([
             'form',
-            'stages.sections.fields.fieldTranslations',
-            'stages.stageAccessRule'
+            'stages.sections.fields.translations',
+            'stages.accessRule'
         ])->findOrFail($formVersionId);
 
         // Get initial stage only
@@ -359,7 +359,7 @@ class EndUserFormService
      */
     private function getLocalizedFormName($formVersion, $language)
     {
-        $translation = $formVersion->formVersionTranslations()
+        $translation = $formVersion->translations()
             ->where('language_id', $language->id)
             ->first();
 
@@ -377,7 +377,7 @@ class EndUserFormService
             $fields = [];
 
             foreach ($section->fields as $field) {
-                $translation = $field->fieldTranslations()
+                $translation = $field->translations()
                     ->where('language_id', $language->id)
                     ->first();
 

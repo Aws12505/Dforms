@@ -75,9 +75,9 @@ class FormService
 
         switch ($sortBy) {
             case 'latest_submission':
-                $query->withMax('formVersions.entries', 'updated_at')
-                      ->orderBy('form_versions_entries_max_updated_at', $sortDirection);
-                break;
+               $query->withMax('entries', 'updated_at')
+                     ->orderBy('entries_max_updated_at', $sortDirection);
+               break;
             case 'publish_time':
                 $query->withMax('formVersions as latest_publish_time', 'published_at')
                       ->orderBy('latest_publish_time', $sortDirection);

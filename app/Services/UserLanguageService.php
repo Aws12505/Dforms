@@ -5,7 +5,7 @@ namespace App\Services;
 use App\Models\User;
 use App\Models\Language;
 use Illuminate\Support\Facades\DB;
-
+use Illuminate\Support\Facades\Auth;
 class UserLanguageService
 {
     /**
@@ -51,7 +51,13 @@ class UserLanguageService
      * Get all available languages for selection
      */
     public function getAllLanguages()
-    {
-        return Language::all();
-    }
+{
+    $user = Auth::user();
+    $defaultId = $user?->default_language_id; // null if not logged in
+
+    return Language::all()->map(function (Language $language) use ($defaultId) {
+        $language->is_user_default = ($defaultId !== null && $language->id == $defaultId);
+        return $language;
+    });
+}
 }
