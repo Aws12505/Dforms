@@ -10,6 +10,7 @@ use App\Models\EntryValue;
 use App\Models\User;
 use App\Models\Language;
 use App\Models\StageTransition;
+use App\Models\Field;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -85,7 +86,7 @@ class EndUserFormService
     {
         $user = $userId ? User::find($userId) : null;
 
-        // Determine language
+        // FIXED: Determine language before using it in closures
         if (!$languageId) {
             $languageId = $user?->default_language_id ?? Language::where('is_default', true)->value('id');
         }
@@ -98,15 +99,17 @@ class EndUserFormService
                           'accessRule',
                           'sections.fields.fieldType',
                           'sections.fields.rules.inputRule',
-                          'sections.fields.translations' => function($q) use ($languageId) {
-                              $q->where('language_id', $languageId);
-                          }
                       ]);
             },
             'translations' => function($q) use ($languageId) {
                 $q->where('language_id', $languageId);
             }
         ])->findOrFail($formVersionId);
+
+        // Load field translations separately to avoid closure issues
+        $formVersion->load(['stages.sections.fields.translations' => function($q) use ($languageId) {
+            $q->where('language_id', $languageId);
+        }]);
 
         $initialStage = $formVersion->stages->first();
 
@@ -182,8 +185,10 @@ class EndUserFormService
 
             // Save field values
             foreach ($fieldValues as $fieldId => $value) {
-                $field = \App\Models\Field::find($fieldId);
+                $field = Field::find($fieldId);
                 if (!$field) continue;
+
+                $field->load('fieldType');
 
                 $processedValue = $this->fieldValueHandlerService->processFieldValue(
                     $value,
@@ -196,15 +201,6 @@ class EndUserFormService
                     'value' => $processedValue,
                 ]);
             }
-
-            // Find available transitions from initial stage
-            $transitions = StageTransition::where('form_version_id', $formVersion->id)
-                ->where('from_stage_id', $initialStage->id)
-                ->with('actions.action')
-                ->get();
-
-            // For now, we stay at initial stage after submission
-            // Transitions will be handled when buttons are clicked
 
             DB::commit();
 
@@ -228,7 +224,7 @@ class EndUserFormService
     {
         $user = $userId ? User::find($userId) : null;
 
-        // Determine language
+        // FIXED: Determine language before using it
         if (!$languageId) {
             $languageId = $user?->default_language_id ?? Language::where('is_default', true)->value('id');
         }
@@ -240,14 +236,16 @@ class EndUserFormService
             },
             'formVersion.stages.sections.fields.fieldType',
             'formVersion.stages.sections.fields.rules.inputRule',
-            'formVersion.stages.sections.fields.translations' => function($q) use ($languageId) {
-                $q->where('language_id', $languageId);
-            },
             'formVersion.stages.accessRule',
             'currentStage',
             'values.field'
         ])->where('public_identifier', $publicIdentifier)
           ->firstOrFail();
+
+        // Load field translations separately
+        $entry->load(['formVersion.stages.sections.fields.translations' => function($q) use ($languageId) {
+            $q->where('language_id', $languageId);
+        }]);
 
         // Check if user can access the current stage
         if (!$this->accessCheckService->canUserAccessEntry($entry, $user)) {
@@ -337,7 +335,7 @@ class EndUserFormService
 
             // Save new field values
             foreach ($fieldValues as $fieldId => $value) {
-                $field = \App\Models\Field::find($fieldId);
+                $field = Field::with('fieldType')->find($fieldId);
                 if (!$field) continue;
 
                 $processedValue = $this->fieldValueHandlerService->processFieldValue(
@@ -356,8 +354,8 @@ class EndUserFormService
                 );
             }
 
-            // Execute transition actions
-            $this->actionExecutionService->executeTransitionActions($transition, $entry, $user);
+            // FIXED: Execute transition actions with correct parameters
+            $this->actionExecutionService->executeTransitionActions($transition->id, $entry);
 
             // Update entry stage or mark as complete
             if ($transition->to_complete) {
@@ -372,6 +370,8 @@ class EndUserFormService
                     'current_stage_id' => $nextStage->id,
                 ]);
                 $message = 'Entry moved to next stage: ' . $nextStage->name;
+            } else {
+                $message = 'Entry updated successfully';
             }
 
             DB::commit();
@@ -393,21 +393,46 @@ class EndUserFormService
 
     /**
      * Build stage structure with sections and fields
+     * FIXED: Return array instead of struct
      */
     private function buildStageStructure(Stage $stage, array $existingValues, int $languageId): array
     {
+        // Load relationships if not loaded
+        if (!$stage->relationLoaded('sections')) {
+            $stage->load('sections.fields.fieldType', 'sections.fields.rules.inputRule');
+        }
+
         $sections = [];
 
         foreach ($stage->sections as $section) {
+            // FIXED: Handle visibility_condition as either array or string
+            $visibilityCondition = $section->visibility_condition;
+            if (is_string($visibilityCondition)) {
+                $visibilityCondition = json_decode($visibilityCondition, true);
+            }
+
             // Check section visibility
-            if (!$this->isSectionVisible($section, $existingValues)) {
+            if (!$this->isSectionVisible($visibilityCondition, $existingValues)) {
                 continue;
             }
 
             $fields = [];
             foreach ($section->fields as $field) {
+                // Load field relationships
+                if (!$field->relationLoaded('translations')) {
+                    $field->load(['translations' => function($q) use ($languageId) {
+                        $q->where('language_id', $languageId);
+                    }]);
+                }
+
+                // FIXED: Handle visibility_condition as either array or string
+                $fieldVisibilityCondition = $field->visibility_condition;
+                if (is_string($fieldVisibilityCondition)) {
+                    $fieldVisibilityCondition = json_decode($fieldVisibilityCondition, true);
+                }
+
                 // Check field visibility
-                if (!$this->isFieldVisible($field, $existingValues)) {
+                if (!$this->isFieldVisible($fieldVisibilityCondition, $existingValues)) {
                     continue;
                 }
 
@@ -425,7 +450,7 @@ class EndUserFormService
                     'rules' => $field->rules->map(function($rule) {
                         return [
                             'rule_name' => $rule->inputRule->name,
-                            'rule_props' => $rule->rule_props ? json_decode($rule->rule_props, true) : null,
+                            'rule_props' => $rule->rule_props ? (is_array($rule->rule_props) ? $rule->rule_props : json_decode($rule->rule_props, true)) : null,
                         ];
                     })->toArray(),
                 ];
@@ -449,28 +474,28 @@ class EndUserFormService
 
     /**
      * Check if section is visible based on conditions
+     * FIXED: Accept either array or null
      */
-    private function isSectionVisible($section, array $values): bool
+    private function isSectionVisible($visibilityCondition, array $values): bool
     {
-        if (empty($section->visibility_condition)) {
+        if (empty($visibilityCondition)) {
             return true;
         }
 
-        $condition = json_decode($section->visibility_condition, true);
-        return $this->fieldValidationService->evaluateCondition($condition, $values);
+        return $this->fieldValidationService->evaluateCondition($visibilityCondition, $values);
     }
 
     /**
      * Check if field is visible based on conditions
+     * FIXED: Accept either array or null
      */
-    private function isFieldVisible($field, array $values): bool
+    private function isFieldVisible($visibilityCondition, array $values): bool
     {
-        if (empty($field->visibility_condition)) {
+        if (empty($visibilityCondition)) {
             return true;
         }
 
-        $condition = json_decode($field->visibility_condition, true);
-        return $this->fieldValidationService->evaluateCondition($condition, $values);
+        return $this->fieldValidationService->evaluateCondition($visibilityCondition, $values);
     }
 
     /**

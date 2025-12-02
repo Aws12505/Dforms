@@ -50,3 +50,7 @@ require __DIR__.'/V1/UserLanguage.php';
 Route::prefix('enduser')->group(function () {
 require __DIR__.'/V1/EndUser.php';
 });
+
+Route::prefix('form-builder')->group(function () {
+    require __DIR__.'/V1/FormBuilderData.php';
+});

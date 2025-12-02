@@ -52,17 +52,23 @@ class StageAccessCheckService
             return true;
         }
 
-        // Check specific users
+        // Check specific users - FIXED: properly handle JSON string from database
         if (!empty($accessRule->allowed_users)) {
-            $allowedUsers = json_decode($accessRule->allowed_users, true) ?? [];
+            $allowedUsers = is_array($accessRule->allowed_users) 
+                ? $accessRule->allowed_users 
+                : json_decode($accessRule->allowed_users, true) ?? [];
+
             if (in_array($user->id, $allowedUsers)) {
                 return true;
             }
         }
 
-        // Check roles
+        // Check roles - FIXED: properly handle JSON string from database
         if (!empty($accessRule->allowed_roles)) {
-            $allowedRoles = json_decode($accessRule->allowed_roles, true) ?? [];
+            $allowedRoles = is_array($accessRule->allowed_roles)
+                ? $accessRule->allowed_roles
+                : json_decode($accessRule->allowed_roles, true) ?? [];
+
             $userRoleIds = $user->roles()->pluck('roles.id')->toArray();
 
             if (!empty(array_intersect($allowedRoles, $userRoleIds))) {
@@ -70,9 +76,12 @@ class StageAccessCheckService
             }
         }
 
-        // Check permissions
+        // Check permissions - FIXED: properly handle JSON string from database
         if (!empty($accessRule->allowed_permissions)) {
-            $allowedPermissions = json_decode($accessRule->allowed_permissions, true) ?? [];
+            $allowedPermissions = is_array($accessRule->allowed_permissions)
+                ? $accessRule->allowed_permissions
+                : json_decode($accessRule->allowed_permissions, true) ?? [];
+
             $userPermissionIds = $user->permissions()->pluck('permissions.id')->toArray();
 
             if (!empty(array_intersect($allowedPermissions, $userPermissionIds))) {
