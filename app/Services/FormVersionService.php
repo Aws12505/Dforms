@@ -16,6 +16,73 @@ use Illuminate\Support\Facades\DB;
 class FormVersionService
 {
     /**
+     * Helper function to check if an ID is a fake ID
+     */
+    private function isFakeId($id): bool
+    {
+        if ($id === null) {
+            return false;
+        }
+        return is_string($id) && (str_starts_with($id, 'FAKE_') || str_starts_with($id, 'temp_'));
+    }
+
+    /**
+     * Recursively resolve all fake IDs in a nested array/object structure
+     * This handles visibility_conditions, rule_conditions, and transition conditions
+     */
+    private function resolveFakeIdsInData($data, array $stageIdMap, array $sectionIdMap, array $fieldIdMap, array $transitionIdMap)
+    {
+        if (is_array($data)) {
+            $resolved = [];
+            foreach ($data as $key => $value) {
+                // Check if the key itself might indicate an ID field
+                if (is_string($key) && (
+                    str_contains($key, 'stage_id') || 
+                    str_contains($key, 'section_id') || 
+                    str_contains($key, 'field_id') ||
+                    str_contains($key, 'transition_id')
+                )) {
+                    // Resolve the value if it's a fake ID
+                    if ($this->isFakeId($value)) {
+                        if (str_contains($key, 'stage')) {
+                            $resolved[$key] = $stageIdMap[$value] ?? $value;
+                        } elseif (str_contains($key, 'section')) {
+                            $resolved[$key] = $sectionIdMap[$value] ?? $value;
+                        } elseif (str_contains($key, 'field')) {
+                            $resolved[$key] = $fieldIdMap[$value] ?? $value;
+                        } elseif (str_contains($key, 'transition')) {
+                            $resolved[$key] = $transitionIdMap[$value] ?? $value;
+                        } else {
+                            $resolved[$key] = $value;
+                        }
+                    } else {
+                        $resolved[$key] = $this->resolveFakeIdsInData($value, $stageIdMap, $sectionIdMap, $fieldIdMap, $transitionIdMap);
+                    }
+                } else {
+                    // Recursively process nested structures
+                    $resolved[$key] = $this->resolveFakeIdsInData($value, $stageIdMap, $sectionIdMap, $fieldIdMap, $transitionIdMap);
+                }
+            }
+            return $resolved;
+        } elseif (is_string($data) && $this->isFakeId($data)) {
+            // Direct ID value - try to resolve it
+            // Check all maps
+            if (isset($stageIdMap[$data])) {
+                return $stageIdMap[$data];
+            } elseif (isset($sectionIdMap[$data])) {
+                return $sectionIdMap[$data];
+            } elseif (isset($fieldIdMap[$data])) {
+                return $fieldIdMap[$data];
+            } elseif (isset($transitionIdMap[$data])) {
+                return $transitionIdMap[$data];
+            }
+            return $data; // Return as-is if not found in any map
+        } else {
+            return $data;
+        }
+    }
+
+    /**
      * Create a new version - either blank or copied from current
      */
     public function createNewVersion(int $formId, bool $copyFromCurrent)
@@ -69,6 +136,7 @@ class FormVersionService
 
             return $newVersion->load([
                 'stages.sections.fields.rules.inputRule',
+                'stages.sections.fields.fieldType',
                 'stages.accessRule',
                 'stageTransitions.fromStage',
                 'stageTransitions.toStage',
@@ -169,7 +237,7 @@ class FormVersionService
             if (isset($stageIdMap[$sourceStage->id])) {
                 $newStageId = $stageIdMap[$sourceStage->id];
                 $accessRule = StageAccessRule::where('stage_id', $newStageId)->first();
-                
+
                 if ($accessRule && $sourceStage->accessRule && $sourceStage->accessRule->email_field_id) {
                     $oldEmailFieldId = $sourceStage->accessRule->email_field_id;
                     if (isset($fieldIdMap[$oldEmailFieldId])) {
@@ -206,7 +274,8 @@ class FormVersionService
     }
 
     /**
-     * Update a draft form version
+     * Update a draft form version with support for fake IDs
+     * Handles ALL ID references including in visibility_conditions and rule_conditions
      */
     public function updateFormVersion(int $id, array $data)
     {
@@ -223,53 +292,70 @@ class FormVersionService
             Stage::where('form_version_id', $id)->delete();
             StageTransition::where('form_version_id', $id)->delete();
 
-            // Maps to track old IDs to new IDs for relationships
+            // Maps to track fake/old IDs to new real IDs
             $stageIdMap = [];
+            $sectionIdMap = [];
             $fieldIdMap = [];
+            $transitionIdMap = [];
 
-            // Create new structure from data
-            foreach ($data['stages'] as $stageData) {
+            // Temporary storage for entities that need post-processing
+            $stagesToUpdate = [];
+            $sectionsToUpdate = [];
+            $fieldsToUpdate = [];
+            $fieldRulesToUpdate = [];
+            $accessRulesToCreate = [];
+            $transitionsToUpdate = [];
+
+            // ============================================================
+            // PASS 1: Create all stages (WITHOUT visibility conditions yet)
+            // ============================================================
+            foreach ($data['stages'] as $stageIndex => $stageData) {
                 $stage = Stage::create([
                     'form_version_id' => $formVersion->id,
                     'name' => $stageData['name'],
                     'is_initial' => $stageData['is_initial'],
-                    'visibility_condition' => $stageData['visibility_condition'] ?? null,
+                    'visibility_condition' => null, // Will be set in pass 5
                 ]);
 
-                // Store old ID to new ID mapping if provided
+                // Map fake or old ID to new real ID
                 if (isset($stageData['id'])) {
                     $stageIdMap[$stageData['id']] = $stage->id;
                 }
 
-                // Create stage access rule if provided
-                if (isset($stageData['access_rule'])) {
-                    $accessRuleData = [
-                        'stage_id' => $stage->id,
-                        'allowed_users' => $stageData['access_rule']['allowed_users'] ?? null,
-                        'allowed_roles' => $stageData['access_rule']['allowed_roles'] ?? null,
-                        'allowed_permissions' => $stageData['access_rule']['allowed_permissions'] ?? null,
-                        'allow_authenticated_users' => $stageData['access_rule']['allow_authenticated_users'] ?? false,
-                        'email_field_id' => null, // Will be updated after fields are created
-                    ];
+                // Store for later processing
+                $stagesToUpdate[] = [
+                    'stage' => $stage,
+                    'original_data' => $stageData
+                ];
+            }
 
-                    $accessRule = StageAccessRule::create($accessRuleData);
+            // ============================================================
+            // PASS 2: Create sections and fields (WITHOUT visibility conditions yet)
+            // ============================================================
+            foreach ($stagesToUpdate as $stageInfo) {
+                $stage = $stageInfo['stage'];
+                $stageData = $stageInfo['original_data'];
 
-                    // Store for later email_field_id mapping
-                    if (isset($stageData['access_rule']['email_field_id'])) {
-                        $stage->_temp_email_field_id = $stageData['access_rule']['email_field_id'];
-                        $stage->_temp_access_rule_id = $accessRule->id;
-                    }
-                }
-
-                foreach ($stageData['sections'] as $sectionData) {
+                foreach ($stageData['sections'] as $sectionIndex => $sectionData) {
                     $section = Section::create([
                         'stage_id' => $stage->id,
                         'name' => $sectionData['name'],
                         'order' => $sectionData['order'],
-                        'visibility_conditions' => $sectionData['visibility_conditions'] ?? null,
+                        'visibility_conditions' => null, // Will be set in pass 5
                     ]);
 
-                    foreach ($sectionData['fields'] as $fieldData) {
+                    // Map fake or old ID to new real ID
+                    if (isset($sectionData['id'])) {
+                        $sectionIdMap[$sectionData['id']] = $section->id;
+                    }
+
+                    // Store for later processing
+                    $sectionsToUpdate[] = [
+                        'section' => $section,
+                        'original_data' => $sectionData
+                    ];
+
+                    foreach ($sectionData['fields'] as $fieldIndex => $fieldData) {
                         $field = Field::create([
                             'section_id' => $section->id,
                             'field_type_id' => $fieldData['field_type_id'],
@@ -277,60 +363,184 @@ class FormVersionService
                             'helper_text' => $fieldData['helper_text'] ?? null,
                             'placeholder' => $fieldData['placeholder'] ?? null,
                             'default_value' => $fieldData['default_value'] ?? null,
-                            'visibility_conditions' => $fieldData['visibility_conditions'] ?? null,
+                            'visibility_conditions' => null, // Will be set in pass 5
                         ]);
 
-                        // Store old ID to new ID mapping if provided
+                        // Map fake or old ID to new real ID
                         if (isset($fieldData['id'])) {
                             $fieldIdMap[$fieldData['id']] = $field->id;
                         }
 
-                        // Create field rules if provided
-                        if (isset($fieldData['rules']) && is_array($fieldData['rules'])) {
-                            foreach ($fieldData['rules'] as $ruleData) {
-                                FieldRule::create([
-                                    'field_id' => $field->id,
-                                    'input_rule_id' => $ruleData['input_rule_id'],
-                                    'rule_props' => $ruleData['rule_props'] ?? null,
-                                    'rule_condition' => $ruleData['rule_condition'] ?? null,
-                                ]);
-                            }
+                        // Store for later processing
+                        $fieldsToUpdate[] = [
+                            'field' => $field,
+                            'original_data' => $fieldData
+                        ];
+                    }
+                }
+            }
+
+            // ============================================================
+            // PASS 3: Create field rules (WITHOUT rule_conditions yet)
+            // ============================================================
+            foreach ($fieldsToUpdate as $fieldInfo) {
+                $field = $fieldInfo['field'];
+                $fieldData = $fieldInfo['original_data'];
+
+                if (isset($fieldData['rules']) && is_array($fieldData['rules'])) {
+                    foreach ($fieldData['rules'] as $ruleData) {
+                        $fieldRule = FieldRule::create([
+                            'field_id' => $field->id,
+                            'input_rule_id' => $ruleData['input_rule_id'],
+                            'rule_props' => $ruleData['rule_props'] ?? null,
+                            'rule_condition' => null, // Will be set in pass 5
+                        ]);
+
+                        // Store for later processing
+                        $fieldRulesToUpdate[] = [
+                            'field_rule' => $fieldRule,
+                            'original_data' => $ruleData
+                        ];
+                    }
+                }
+            }
+
+            // ============================================================
+            // PASS 4: Create stage access rules
+            // ============================================================
+            foreach ($stagesToUpdate as $stageInfo) {
+                $stage = $stageInfo['stage'];
+                $stageData = $stageInfo['original_data'];
+
+                if (isset($stageData['access_rule'])) {
+                    $accessRuleData = $stageData['access_rule'];
+
+                    // Resolve email_field_id if it's a fake ID
+                    $emailFieldId = null;
+                    if (isset($accessRuleData['email_field_id'])) {
+                        $providedEmailFieldId = $accessRuleData['email_field_id'];
+
+                        if ($this->isFakeId($providedEmailFieldId)) {
+                            $emailFieldId = $fieldIdMap[$providedEmailFieldId] ?? null;
+                        } else {
+                            $emailFieldId = $providedEmailFieldId;
                         }
                     }
+
+                    StageAccessRule::create([
+                        'stage_id' => $stage->id,
+                        'allowed_users' => $accessRuleData['allowed_users'] ?? null,
+                        'allowed_roles' => $accessRuleData['allowed_roles'] ?? null,
+                        'allowed_permissions' => $accessRuleData['allowed_permissions'] ?? null,
+                        'allow_authenticated_users' => $accessRuleData['allow_authenticated_users'] ?? false,
+                        'email_field_id' => $emailFieldId,
+                    ]);
                 }
             }
 
-            // Update email_field_id in access rules now that fields are created
-            foreach ($data['stages'] as $stageIndex => $stageData) {
-                if (isset($stageData['access_rule']['email_field_id'])) {
-                    $oldEmailFieldId = $stageData['access_rule']['email_field_id'];
-                    
-                    // Get the new stage ID
-                    $newStageId = isset($stageData['id']) && isset($stageIdMap[$stageData['id']]) 
-                        ? $stageIdMap[$stageData['id']] 
-                        : null;
+            // ============================================================
+            // PASS 5: Update visibility conditions and rule conditions
+            // Now all IDs exist, so we can resolve fake IDs in conditions
+            // ============================================================
 
-                    // If we have the new stage and the field mapping exists
-                    if ($newStageId && isset($fieldIdMap[$oldEmailFieldId])) {
-                        StageAccessRule::where('stage_id', $newStageId)
-                            ->update(['email_field_id' => $fieldIdMap[$oldEmailFieldId]]);
-                    }
+            // Update stage visibility conditions
+            foreach ($stagesToUpdate as $stageInfo) {
+                $stage = $stageInfo['stage'];
+                $stageData = $stageInfo['original_data'];
+
+                if (isset($stageData['visibility_condition'])) {
+                    $resolvedCondition = $this->resolveFakeIdsInData(
+                        $stageData['visibility_condition'],
+                        $stageIdMap,
+                        $sectionIdMap,
+                        $fieldIdMap,
+                        $transitionIdMap
+                    );
+                    $stage->update(['visibility_condition' => $resolvedCondition]);
                 }
             }
 
-            // Create stage transitions if provided
+            // Update section visibility conditions
+            foreach ($sectionsToUpdate as $sectionInfo) {
+                $section = $sectionInfo['section'];
+                $sectionData = $sectionInfo['original_data'];
+
+                if (isset($sectionData['visibility_conditions'])) {
+                    $resolvedConditions = $this->resolveFakeIdsInData(
+                        $sectionData['visibility_conditions'],
+                        $stageIdMap,
+                        $sectionIdMap,
+                        $fieldIdMap,
+                        $transitionIdMap
+                    );
+                    $section->update(['visibility_conditions' => $resolvedConditions]);
+                }
+            }
+
+            // Update field visibility conditions
+            foreach ($fieldsToUpdate as $fieldInfo) {
+                $field = $fieldInfo['field'];
+                $fieldData = $fieldInfo['original_data'];
+
+                if (isset($fieldData['visibility_conditions'])) {
+                    $resolvedConditions = $this->resolveFakeIdsInData(
+                        $fieldData['visibility_conditions'],
+                        $stageIdMap,
+                        $sectionIdMap,
+                        $fieldIdMap,
+                        $transitionIdMap
+                    );
+                    $field->update(['visibility_conditions' => $resolvedConditions]);
+                }
+            }
+
+            // Update field rule conditions
+            foreach ($fieldRulesToUpdate as $ruleInfo) {
+                $fieldRule = $ruleInfo['field_rule'];
+                $ruleData = $ruleInfo['original_data'];
+
+                if (isset($ruleData['rule_condition'])) {
+                    $resolvedCondition = $this->resolveFakeIdsInData(
+                        $ruleData['rule_condition'],
+                        $stageIdMap,
+                        $sectionIdMap,
+                        $fieldIdMap,
+                        $transitionIdMap
+                    );
+                    $fieldRule->update(['rule_condition' => $resolvedCondition]);
+                }
+            }
+
+            // ============================================================
+            // PASS 6: Create stage transitions
+            // ============================================================
             if (isset($data['stage_transitions']) && is_array($data['stage_transitions'])) {
                 foreach ($data['stage_transitions'] as $transitionData) {
-                    // Map old stage IDs to new ones
-                    $fromStageId = isset($transitionData['from_stage_id']) && isset($stageIdMap[$transitionData['from_stage_id']])
-                        ? $stageIdMap[$transitionData['from_stage_id']]
-                        : $transitionData['from_stage_id'];
+                    // Resolve from_stage_id
+                    $fromStageId = $transitionData['from_stage_id'];
+                    if ($this->isFakeId($fromStageId)) {
+                        $fromStageId = $stageIdMap[$fromStageId] ?? null;
+                    }
 
+                    // Resolve to_stage_id (can be null for complete transitions)
                     $toStageId = null;
-                    if (isset($transitionData['to_stage_id'])) {
-                        $toStageId = isset($stageIdMap[$transitionData['to_stage_id']])
-                            ? $stageIdMap[$transitionData['to_stage_id']]
-                            : $transitionData['to_stage_id'];
+                    if (isset($transitionData['to_stage_id']) && $transitionData['to_stage_id'] !== null) {
+                        $toStageId = $transitionData['to_stage_id'];
+                        if ($this->isFakeId($toStageId)) {
+                            $toStageId = $stageIdMap[$toStageId] ?? null;
+                        }
+                    }
+
+                    // Resolve condition (may contain fake IDs)
+                    $condition = null;
+                    if (isset($transitionData['condition'])) {
+                        $condition = $this->resolveFakeIdsInData(
+                            $transitionData['condition'],
+                            $stageIdMap,
+                            $sectionIdMap,
+                            $fieldIdMap,
+                            $transitionIdMap
+                        );
                     }
 
                     $transition = StageTransition::create([
@@ -339,16 +549,33 @@ class FormVersionService
                         'to_stage_id' => $toStageId,
                         'to_complete' => $transitionData['to_complete'] ?? false,
                         'label' => $transitionData['label'],
-                        'condition' => $transitionData['condition'] ?? null,
+                        'condition' => $condition,
                     ]);
 
-                    // Create transition actions if provided
+                    // Map fake or old ID to new real ID
+                    if (isset($transitionData['id'])) {
+                        $transitionIdMap[$transitionData['id']] = $transition->id;
+                    }
+
+                    // Create transition actions
                     if (isset($transitionData['actions']) && is_array($transitionData['actions'])) {
                         foreach ($transitionData['actions'] as $actionData) {
+                            // Resolve action props (may contain fake IDs)
+                            $actionProps = null;
+                            if (isset($actionData['action_props'])) {
+                                $actionProps = $this->resolveFakeIdsInData(
+                                    $actionData['action_props'],
+                                    $stageIdMap,
+                                    $sectionIdMap,
+                                    $fieldIdMap,
+                                    $transitionIdMap
+                                );
+                            }
+
                             StageTransitionAction::create([
                                 'stage_transition_id' => $transition->id,
                                 'action_id' => $actionData['action_id'],
-                                'action_props' => $actionData['action_props'] ?? null,
+                                'action_props' => $actionProps,
                             ]);
                         }
                     }
@@ -359,6 +586,7 @@ class FormVersionService
 
             return $formVersion->load([
                 'stages.sections.fields.rules.inputRule',
+                'stages.sections.fields.fieldType',
                 'stages.accessRule',
                 'stageTransitions.fromStage',
                 'stageTransitions.toStage',
