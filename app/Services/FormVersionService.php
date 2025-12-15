@@ -341,7 +341,7 @@ public function updateFormVersion(int $id, array $data)
                     'stage_id' => $stage->id,
                     'name' => $sectionData['name'],
                     'order' => $sectionData['order'],
-                    'visibility_conditions' => null, // Will be set in pass 5
+                    'visibility_condition' => null, // FIXED: singular not plural
                 ]);
 
                 // Map fake or old ID to new real ID
@@ -363,7 +363,7 @@ public function updateFormVersion(int $id, array $data)
                         'helper_text' => $fieldData['helper_text'] ?? null,
                         'placeholder' => $fieldData['placeholder'] ?? null,
                         'default_value' => $fieldData['default_value'] ?? null,
-                        'visibility_conditions' => null, // Will be set in pass 5
+                        'visibility_condition' => null, // FIXED: singular not plural
                     ]);
 
                     // Map fake or old ID to new real ID
@@ -473,7 +473,7 @@ public function updateFormVersion(int $id, array $data)
                     $fieldIdMap,
                     $transitionIdMap
                 );
-                $section->update(['visibility_conditions' => $resolvedConditions]);
+                $section->update(['visibility_condition' => $resolvedConditions]); // FIXED: singular
             }
         }
 
@@ -490,7 +490,7 @@ public function updateFormVersion(int $id, array $data)
                     $fieldIdMap,
                     $transitionIdMap
                 );
-                $field->update(['visibility_conditions' => $resolvedConditions]);
+                $field->update(['visibility_condition' => $resolvedConditions]); // FIXED: singular
             }
         }
 
