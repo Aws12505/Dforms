@@ -112,19 +112,13 @@ class SuperadminPreProductionSeeder extends Seeder
                 'name' => 'min',
                 'description' => 'Minimum length (for text) or minimum value (for numbers)',
                 'is_public' => true,
-                'applies_to' => [1, 2, 3, 4, 5, 8, 11, 12, 17, 23, 24], // Text, Email, Number, Phone, TextArea, Date, URL, Dropdown, Currency, Percentage
+                'applies_to' => [1, 3, 5, 17, 21, 23, 24], // Text, Email, Number, Phone, TextArea, Date, URL, Dropdown, Currency, Percentage
             ],
             [
                 'name' => 'max',
                 'description' => 'Maximum length (for text) or maximum value (for numbers)',
                 'is_public' => true,
-                'applies_to' => [1, 2, 3, 4, 5, 8, 11, 12, 17, 23, 24],
-            ],
-            [
-                'name' => 'email',
-                'description' => 'Must be a valid email address',
-                'is_public' => true,
-                'applies_to' => [2], // Email Input
+                'applies_to' => [1, 3, 5, 17, 21, 23, 24],
             ],
             [
                 'name' => 'url',
@@ -136,7 +130,7 @@ class SuperadminPreProductionSeeder extends Seeder
                 'name' => 'numeric',
                 'description' => 'Must be a numeric value',
                 'is_public' => true,
-                'applies_to' => [3, 21, 23, 24], // Number, Slider, Currency, Percentage
+                'applies_to' => [3, 21, 24], // Number, Slider, Currency, Percentage
             ],
             [
                 'name' => 'integer',
@@ -169,30 +163,6 @@ class SuperadminPreProductionSeeder extends Seeder
                 'applies_to' => [1, 2, 4, 5], // Text, Email, Phone, TextArea
             ],
             [
-                'name' => 'in',
-                'description' => 'Must be one of the specified values',
-                'is_public' => true,
-                'applies_to' => [9, 10, 11, 12], // Checkbox, Radio, Dropdown, Multi-Select
-            ],
-            [
-                'name' => 'not_in',
-                'description' => 'Must not be one of the specified values',
-                'is_public' => true,
-                'applies_to' => [9, 10, 11, 12],
-            ],
-            [
-                'name' => 'date',
-                'description' => 'Must be a valid date',
-                'is_public' => true,
-                'applies_to' => [6, 8], // Date, DateTime
-            ],
-            [
-                'name' => 'date_format',
-                'description' => 'Date must match a specific format',
-                'is_public' => true,
-                'applies_to' => [6, 7, 8], // Date, Time, DateTime
-            ],
-            [
                 'name' => 'before',
                 'description' => 'Date must be before a specified date',
                 'is_public' => true,
@@ -217,20 +187,8 @@ class SuperadminPreProductionSeeder extends Seeder
                 'applies_to' => [6, 8],
             ],
             [
-                'name' => 'mimes',
-                'description' => 'File must be of specified MIME types (e.g., jpg, png, pdf)',
-                'is_public' => true,
-                'applies_to' => [13, 14, 15, 16], // File, Image, Video, Document Upload
-            ],
-            [
                 'name' => 'mimetypes',
                 'description' => 'File must match specified MIME type patterns',
-                'is_public' => true,
-                'applies_to' => [13, 14, 15, 16],
-            ],
-            [
-                'name' => 'size',
-                'description' => 'File size must be equal to specified size in kilobytes',
                 'is_public' => true,
                 'applies_to' => [13, 14, 15, 16],
             ],
@@ -257,12 +215,6 @@ class SuperadminPreProductionSeeder extends Seeder
                 'description' => 'Value must be between two values (for numbers or string length)',
                 'is_public' => true,
                 'applies_to' => [1, 3, 5, 21, 23, 24],
-            ],
-            [
-                'name' => 'confirmed',
-                'description' => 'Field must match a confirmation field (e.g., password confirmation)',
-                'is_public' => true,
-                'applies_to' => [2, 18], // Email, Password
             ],
             [
                 'name' => 'same',
@@ -292,25 +244,13 @@ class SuperadminPreProductionSeeder extends Seeder
                 'name' => 'ends_with',
                 'description' => 'String must end with specified value(s)',
                 'is_public' => true,
-                'applies_to' => [1, 2, 4, 5, 17],
+                'applies_to' => [1, 2, 5, 17],
             ],
             [
                 'name' => 'json',
                 'description' => 'Field must be valid JSON',
                 'is_public' => false,
                 'applies_to' => [5], // TextArea
-            ],
-            [
-                'name' => 'latitude',
-                'description' => 'Must be a valid latitude coordinate',
-                'is_public' => true,
-                'applies_to' => [26], // Location Picker
-            ],
-            [
-                'name' => 'longitude',
-                'description' => 'Must be a valid longitude coordinate',
-                'is_public' => true,
-                'applies_to' => [26], // Location Picker
             ],
         ];
 

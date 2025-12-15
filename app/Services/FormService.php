@@ -15,7 +15,7 @@ class FormService
      */
     public function getFormsList(array $filters)
     {
-        $query = Form::with(['category', 'formVersions']);
+        $query = Form::with(['category']);
 
         // Filter by name
         if (!empty($filters['name'])) {
