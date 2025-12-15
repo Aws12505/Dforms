@@ -9,7 +9,7 @@ use App\Http\Requests\EndUser\SubmitInitialStageRequest;
 use App\Http\Requests\EndUser\GetEntryByPublicIdentifierRequest;
 use App\Http\Requests\EndUser\SubmitLaterStageRequest;
 use Illuminate\Http\JsonResponse;
-
+use Illuminate\Support\Facades\Auth;
 class EndUserFormController extends Controller
 {
     protected EndUserFormService $endUserFormService;
@@ -26,7 +26,8 @@ class EndUserFormController extends Controller
     public function getAvailableForms(GetAvailableFormsRequest $request): JsonResponse
     {
         try {
-            $forms = $this->endUserFormService->getAvailableForms(
+            $forms = $this->endUserFormService->getAvailableFormsForUser(
+                Auth::id(),
                 $request->input('language_id')
             );
 
@@ -43,6 +44,7 @@ class EndUserFormController extends Controller
         }
     }
 
+
     /**
      * GET /api/enduser/forms/{formVersionId}/structure
      * Get form structure (localized, initial stage only)
@@ -52,6 +54,7 @@ class EndUserFormController extends Controller
         try {
             $structure = $this->endUserFormService->getFormStructure(
                 $request->input('form_version_id'),
+                Auth::id(), // FIXED: Added missing userId parameter
                 $request->input('language_id')
             );
 
@@ -75,7 +78,13 @@ class EndUserFormController extends Controller
     public function submitInitialStage(SubmitInitialStageRequest $request): JsonResponse
     {
         try {
-            $result = $this->endUserFormService->submitInitialStage($request->validated());
+            // FIXED: Pass correct parameters to service
+            $result = $this->endUserFormService->submitInitialStage(
+                $request->input('form_version_id'),
+                $request->input('field_values'),
+                $request->input('stage_transition_id'), // FIXED: Added transition ID
+                Auth::id()
+            );
 
             return response()->json([
                 'success' => true,
@@ -100,6 +109,7 @@ class EndUserFormController extends Controller
         try {
             $entry = $this->endUserFormService->getEntryByPublicIdentifier(
                 $request->input('public_identifier'),
+                Auth::id(), // FIXED: Added missing userId parameter
                 $request->input('language_id')
             );
 
@@ -116,6 +126,7 @@ class EndUserFormController extends Controller
         }
     }
 
+
     /**
      * POST /api/enduser/entries/submit-later-stage
      * Submit later stage
@@ -123,7 +134,13 @@ class EndUserFormController extends Controller
     public function submitLaterStage(SubmitLaterStageRequest $request): JsonResponse
     {
         try {
-            $result = $this->endUserFormService->submitLaterStage($request->validated());
+            // FIXED: Pass correct parameters to service
+            $result = $this->endUserFormService->submitLaterStage(
+                $request->input('public_identifier'),
+                $request->input('field_values'),
+                $request->input('stage_transition_id'),
+                Auth::id()
+            );
 
             return response()->json([
                 'success' => true,

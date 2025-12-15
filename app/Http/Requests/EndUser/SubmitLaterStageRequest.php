@@ -11,14 +11,14 @@ class SubmitLaterStageRequest extends FormRequest
         return true;
     }
 
-    public function rules(): array
+       public function rules(): array
     {
         return [
             'public_identifier' => 'required|string|exists:entries,public_identifier',
             'stage_transition_id' => 'required|integer|exists:stage_transitions,id',
             'field_values' => 'required|array',
-            'field_values.*.field_id' => 'required|integer|exists:fields,id',
-            'field_values.*.value' => 'required',
+            // FIXED: Changed structure to match service expectation (fieldId => value)
+            'field_values.*' => 'nullable', // Values can be any type
         ];
     }
 
@@ -33,10 +33,7 @@ class SubmitLaterStageRequest extends FormRequest
             'stage_transition_id.exists' => 'The selected stage transition does not exist.',
             'field_values.required' => 'Field values are required.',
             'field_values.array' => 'Field values must be an array.',
-            'field_values.*.field_id.required' => 'Field ID is required for each value.',
-            'field_values.*.field_id.integer' => 'Field ID must be an integer.',
-            'field_values.*.field_id.exists' => 'One or more fields do not exist.',
-            'field_values.*.value.required' => 'Value is required for each field.',
         ];
     }
+
 }

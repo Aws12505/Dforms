@@ -83,139 +83,306 @@ class EndUserFormService
      * Get form structure for initial submission
      */
     public function getFormStructure(int $formVersionId, ?int $userId = null, ?int $languageId = null): array
-    {
-        $user = $userId ? User::find($userId) : null;
+{
+    $user = $userId ? User::find($userId) : null;
 
-        // FIXED: Determine language before using it in closures
-        if (!$languageId) {
-            $languageId = $user?->default_language_id ?? Language::where('is_default', true)->value('id');
-        }
+    // Determine language before using it in closures
+    if (!$languageId) {
+        $languageId = $user?->default_language_id ?? Language::where('is_default', true)->value('id');
+    }
 
-        $formVersion = FormVersion::with([
-            'form',
-            'stages' => function($query) {
-                $query->where('is_initial', true)
-                      ->with([
-                          'accessRule',
-                          'sections.fields.fieldType',
-                          'sections.fields.rules.inputRule',
-                      ]);
-            },
-            'translations' => function($q) use ($languageId) {
-                $q->where('language_id', $languageId);
-            }
-        ])->findOrFail($formVersionId);
-
-        // Load field translations separately to avoid closure issues
-        $formVersion->load(['stages.sections.fields.translations' => function($q) use ($languageId) {
+    $formVersion = FormVersion::with([
+        'form',
+        'stages' => function($query) {
+            $query->where('is_initial', true)
+                  ->with([
+                      'accessRule',
+                      'sections.fields.fieldType',
+                      'sections.fields.rules.inputRule',
+                  ]);
+        },
+        'translations' => function($q) use ($languageId) {
             $q->where('language_id', $languageId);
-        }]);
+        },
+        'stageTransitions.toStage', // Load transitions
+        'stageTransitions.actions.action' // Load transition actions
+    ])->findOrFail($formVersionId);
 
-        $initialStage = $formVersion->stages->first();
+    // Load field translations separately to avoid closure issues
+    $formVersion->load(['stages.sections.fields.translations' => function($q) use ($languageId) {
+        $q->where('language_id', $languageId);
+    }]);
 
-        if (!$initialStage) {
-            throw new \Exception('No initial stage found for this form version.');
+    $initialStage = $formVersion->stages->first();
+
+    if (!$initialStage) {
+        throw new \Exception('No initial stage found for this form version.');
+    }
+
+    // Check access to initial stage
+    if (!$this->accessCheckService->canUserAccessStage($initialStage, $user)) {
+        throw new \Exception('You do not have access to this form.');
+    }
+
+    // Get form translation
+    $formTranslation = $formVersion->translations->first();
+    $formName = $formTranslation ? $formTranslation->name : $formVersion->form->name;
+
+    // Build stage structure with visibility evaluation
+    $stageData = $this->buildStageStructureWithDetails($initialStage, [], $languageId);
+
+    // Get available transitions from initial stage
+    $availableTransitions = $formVersion->stageTransitions()
+        ->where('from_stage_id', $initialStage->id)
+        ->with(['toStage', 'actions.action'])
+        ->get()
+        ->map(function($transition) {
+            return [
+                'transition_id' => $transition->id,
+                'label' => $transition->label,
+                'to_stage_id' => $transition->to_stage_id,
+                'to_stage_name' => $transition->toStage ? $transition->toStage->name : null,
+                'to_complete' => $transition->to_complete,
+                'condition' => $transition->condition ? (is_string($transition->condition) ? json_decode($transition->condition, true) : $transition->condition) : null,
+                'actions' => $transition->actions->map(function($action) {
+                    return [
+                        'action_id' => $action->action_id,
+                        'action_name' => $action->action->name,
+                    ];
+                })->toArray(),
+            ];
+        })->toArray();
+
+    return [
+        'form_version_id' => $formVersion->id,
+        'form_name' => $formName,
+        'version_number' => $formVersion->version_number,
+        'stage' => $stageData,
+        'available_transitions' => $availableTransitions,
+    ];
+}
+
+/**
+ * Build stage structure with complete details
+ */
+private function buildStageStructureWithDetails(Stage $stage, array $existingValues, int $languageId): array
+{
+    // Load relationships if not loaded
+    if (!$stage->relationLoaded('sections')) {
+        $stage->load('sections.fields.fieldType', 'sections.fields.rules.inputRule', 'accessRule');
+    }
+
+    $sections = [];
+
+    foreach ($stage->sections as $section) {
+        // Handle visibility_condition as either array or string
+        $visibilityCondition = $section->visibility_condition;
+        if (is_string($visibilityCondition)) {
+            $visibilityCondition = json_decode($visibilityCondition, true);
         }
 
-        // Check access to initial stage
-        if (!$this->accessCheckService->canUserAccessStage($initialStage, $user)) {
-            throw new \Exception('You do not have access to this form.');
+        // Check section visibility
+        if (!$this->isSectionVisible($visibilityCondition, $existingValues)) {
+            continue;
         }
 
-        // Get form translation
-        $formTranslation = $formVersion->translations->first();
-        $formName = $formTranslation ? $formTranslation->name : $formVersion->form->name;
+        $fields = [];
+        foreach ($section->fields as $field) {
+            // Load field relationships
+            if (!$field->relationLoaded('translations')) {
+                $field->load(['translations' => function($q) use ($languageId) {
+                    $q->where('language_id', $languageId);
+                }]);
+            }
 
-        // Build stage structure with visibility evaluation
-        $stageData = $this->buildStageStructure($initialStage, [], $languageId);
+            // Handle visibility_condition as either array or string
+            $fieldVisibilityCondition = $field->visibility_condition;
+            if (is_string($fieldVisibilityCondition)) {
+                $fieldVisibilityCondition = json_decode($fieldVisibilityCondition, true);
+            }
 
-        return [
-            'form_version_id' => $formVersion->id,
-            'form_name' => $formName,
-            'stage' => $stageData,
+            // Check field visibility
+            if (!$this->isFieldVisible($fieldVisibilityCondition, $existingValues)) {
+                continue;
+            }
+
+            // Get field translation
+            $fieldTranslation = $field->translations->first();
+
+            // Parse default value if it's JSON
+            $defaultValue = $fieldTranslation ? $fieldTranslation->default_value : $field->default_value;
+            if (is_string($defaultValue) && json_decode($defaultValue) !== null) {
+                $defaultValue = json_decode($defaultValue, true);
+            }
+
+            $fields[] = [
+                'field_id' => $field->id,
+                'field_type_id' => $field->field_type_id,
+                'field_type' => $field->fieldType->name,
+                'label' => $fieldTranslation ? $fieldTranslation->label : $field->label,
+                'placeholder' => $field->placeholder,
+                'helper_text' => $fieldTranslation ? $fieldTranslation->helper_text : $field->helper_text,
+                'default_value' => $defaultValue,
+                'current_value' => $existingValues[$field->id] ?? null,
+                'visibility_condition' => $fieldVisibilityCondition,
+                'rules' => $field->rules->map(function($rule) {
+                    $ruleProps = $rule->rule_props;
+                    if (is_string($ruleProps) && json_decode($ruleProps) !== null) {
+                        $ruleProps = json_decode($ruleProps, true);
+                    }
+                    
+                    return [
+                        'rule_id' => $rule->id,
+                        'input_rule_id' => $rule->input_rule_id,
+                        'rule_name' => $rule->inputRule->name,
+                        'rule_description' => $rule->inputRule->description,
+                        'rule_props' => $ruleProps,
+                        'rule_condition' => $rule->rule_condition ? (is_string($rule->rule_condition) ? json_decode($rule->rule_condition, true) : $rule->rule_condition) : null,
+                    ];
+                })->toArray(),
+            ];
+        }
+
+        if (!empty($fields)) {
+            $sections[] = [
+                'section_id' => $section->id,
+                'section_name' => $section->name,
+                'section_order' => $section->order,
+                'visibility_condition' => $visibilityCondition,
+                'fields' => $fields,
+            ];
+        }
+    }
+
+    // Build access rule details
+    $accessRuleDetails = null;
+    if ($stage->accessRule) {
+        $accessRuleDetails = [
+            'allow_authenticated_users' => $stage->accessRule->allow_authenticated_users,
+            'allowed_users' => $stage->accessRule->allowed_users ? (is_string($stage->accessRule->allowed_users) ? json_decode($stage->accessRule->allowed_users, true) : $stage->accessRule->allowed_users) : null,
+            'allowed_roles' => $stage->accessRule->allowed_roles ? (is_string($stage->accessRule->allowed_roles) ? json_decode($stage->accessRule->allowed_roles, true) : $stage->accessRule->allowed_roles) : null,
+            'allowed_permissions' => $stage->accessRule->allowed_permissions ? (is_string($stage->accessRule->allowed_permissions) ? json_decode($stage->accessRule->allowed_permissions, true) : $stage->accessRule->allowed_permissions) : null,
+            'email_field_id' => $stage->accessRule->email_field_id,
         ];
     }
+
+    // Handle stage visibility_condition
+    $stageVisibilityCondition = $stage->visibility_condition;
+    if (is_string($stageVisibilityCondition)) {
+        $stageVisibilityCondition = json_decode($stageVisibilityCondition, true);
+    }
+
+    return [
+        'stage_id' => $stage->id,
+        'stage_name' => $stage->name,
+        'is_initial' => $stage->is_initial,
+        'visibility_condition' => $stageVisibilityCondition,
+        'access_rule' => $accessRuleDetails,
+        'sections' => $sections,
+    ];
+}
 
     /**
      * Submit initial stage of a form
      */
-    public function submitInitialStage(int $formVersionId, array $fieldValues, ?int $userId = null): array
-    {
-        $user = $userId ? User::find($userId) : null;
+    public function submitInitialStage(int $formVersionId, array $fieldValues, ?int $transitionId = null, ?int $userId = null): array
+{
+    $user = $userId ? User::find($userId) : null;
 
-        DB::beginTransaction();
-        try {
-            $formVersion = FormVersion::with([
-                'stages' => function($query) {
-                    $query->where('is_initial', true)->with('accessRule', 'sections.fields.fieldType');
-                }
-            ])->findOrFail($formVersionId);
-
-            $initialStage = $formVersion->stages->first();
-
-            if (!$initialStage) {
-                throw new \Exception('No initial stage found.');
+    DB::beginTransaction();
+    try {
+        $formVersion = FormVersion::with([
+            'stages' => function($query) {
+                $query->where('is_initial', true)->with('accessRule', 'sections.fields.fieldType');
             }
+        ])->findOrFail($formVersionId);
 
-            // Check access
-            if (!$this->accessCheckService->canUserAccessStage($initialStage, $user)) {
-                throw new \Exception('You do not have access to submit this form.');
-            }
+        $initialStage = $formVersion->stages->first();
 
-            // Validate submission
-            $errors = $this->fieldValidationService->validateSubmissionValues(
-                $fieldValues,
-                $initialStage->id,
-                $fieldValues
+        if (!$initialStage) {
+            throw new \Exception('No initial stage found.');
+        }
+
+        // Check access
+        if (!$this->accessCheckService->canUserAccessStage($initialStage, $user)) {
+            throw new \Exception('You do not have access to submit this form.');
+        }
+
+        // Validate submission
+        $errors = $this->fieldValidationService->validateSubmissionValues(
+            $fieldValues,
+            $initialStage->id,
+            $fieldValues
+        );
+
+        if (!empty($errors)) {
+            throw new \Exception('Validation failed: ' . json_encode($errors));
+        }
+
+        // Create entry
+        $entry = Entry::create([
+            'form_version_id' => $formVersion->id,
+            'current_stage_id' => $initialStage->id,
+            'public_identifier' => (string) Str::uuid(),
+            'is_complete' => false,
+            'is_considered' => false,
+            'created_by_user_id' => $userId,
+        ]);
+
+        // Save field values
+        foreach ($fieldValues as $fieldId => $value) {
+            $field = Field::find($fieldId);
+            if (!$field) continue;
+
+            $field->load('fieldType');
+
+            $processedValue = $this->fieldValueHandlerService->processFieldValue(
+                $value,
+                $field->fieldType->name
             );
 
-            if (!empty($errors)) {
-                throw new \Exception('Validation failed: ' . json_encode($errors));
-            }
-
-            // Create entry
-            $entry = Entry::create([
-                'form_version_id' => $formVersion->id,
-                'current_stage_id' => $initialStage->id,
-                'public_identifier' => (string) Str::uuid(),
-                'is_complete' => false,
-                'is_considered' => false,
-                'created_by_user_id' => $userId,
-            ]);
-
-            // Save field values
-            foreach ($fieldValues as $fieldId => $value) {
-                $field = Field::find($fieldId);
-                if (!$field) continue;
-
-                $field->load('fieldType');
-
-                $processedValue = $this->fieldValueHandlerService->processFieldValue(
-                    $value,
-                    $field->fieldType->name
-                );
-
-                EntryValue::create([
-                    'entry_id' => $entry->id,
-                    'field_id' => $fieldId,
-                    'value' => $processedValue,
-                ]);
-            }
-
-            DB::commit();
-
-            return [
-                'success' => true,
+            EntryValue::create([
                 'entry_id' => $entry->id,
-                'public_identifier' => $entry->public_identifier,
-                'message' => 'Form submitted successfully',
-            ];
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            throw $e;
+                'field_id' => $fieldId,
+                'value' => $processedValue,
+            ]);
         }
+
+        // FIXED: Handle transition if provided
+        if ($transitionId) {
+            $transition = StageTransition::with('actions.action')
+                ->where('id', $transitionId)
+                ->where('form_version_id', $formVersion->id)
+                ->where('from_stage_id', $initialStage->id)
+                ->firstOrFail();
+
+            // Execute transition actions
+            $this->actionExecutionService->executeTransitionActions($transition->id, $entry);
+
+            // Update entry based on transition
+            if ($transition->to_complete) {
+                $entry->update(['is_complete' => true]);
+            } elseif ($transition->to_stage_id) {
+                $entry->update(['current_stage_id' => $transition->to_stage_id]);
+            }
+        }
+
+        DB::commit();
+
+        return [
+            'success' => true,
+            'entry_id' => $entry->id,
+            'public_identifier' => $entry->public_identifier,
+            'is_complete' => $entry->is_complete,
+            'current_stage_id' => $entry->current_stage_id,
+            'message' => 'Form submitted successfully',
+        ];
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        throw $e;
     }
+}
 
     /**
      * Get entry by public identifier for later stage filling
@@ -271,7 +438,7 @@ class EndUserFormService
                     'stage_name' => $stage->name,
                     'is_current' => $isCurrentStage,
                     'is_readonly' => $isPreviousStage,
-                    'structure' => $this->buildStageStructure($stage, $existingValues, $languageId),
+                    'structure' => $this->buildStageStructureWithDetails($stage, $existingValues, $languageId),
                 ];
             }
         }
@@ -391,86 +558,6 @@ class EndUserFormService
         }
     }
 
-    /**
-     * Build stage structure with sections and fields
-     * FIXED: Return array instead of struct
-     */
-    private function buildStageStructure(Stage $stage, array $existingValues, int $languageId): array
-    {
-        // Load relationships if not loaded
-        if (!$stage->relationLoaded('sections')) {
-            $stage->load('sections.fields.fieldType', 'sections.fields.rules.inputRule');
-        }
-
-        $sections = [];
-
-        foreach ($stage->sections as $section) {
-            // FIXED: Handle visibility_condition as either array or string
-            $visibilityCondition = $section->visibility_condition;
-            if (is_string($visibilityCondition)) {
-                $visibilityCondition = json_decode($visibilityCondition, true);
-            }
-
-            // Check section visibility
-            if (!$this->isSectionVisible($visibilityCondition, $existingValues)) {
-                continue;
-            }
-
-            $fields = [];
-            foreach ($section->fields as $field) {
-                // Load field relationships
-                if (!$field->relationLoaded('translations')) {
-                    $field->load(['translations' => function($q) use ($languageId) {
-                        $q->where('language_id', $languageId);
-                    }]);
-                }
-
-                // FIXED: Handle visibility_condition as either array or string
-                $fieldVisibilityCondition = $field->visibility_condition;
-                if (is_string($fieldVisibilityCondition)) {
-                    $fieldVisibilityCondition = json_decode($fieldVisibilityCondition, true);
-                }
-
-                // Check field visibility
-                if (!$this->isFieldVisible($fieldVisibilityCondition, $existingValues)) {
-                    continue;
-                }
-
-                // Get field translation
-                $fieldTranslation = $field->translations->first();
-
-                $fields[] = [
-                    'field_id' => $field->id,
-                    'field_type' => $field->fieldType->name,
-                    'label' => $fieldTranslation ? $fieldTranslation->label : $field->label,
-                    'placeholder' => $field->placeholder,
-                    'helper_text' => $fieldTranslation ? $fieldTranslation->helper_text : $field->helper_text,
-                    'default_value' => $fieldTranslation ? $fieldTranslation->default_value : $field->default_value,
-                    'current_value' => $existingValues[$field->id] ?? null,
-                    'rules' => $field->rules->map(function($rule) {
-                        return [
-                            'rule_name' => $rule->inputRule->name,
-                            'rule_props' => $rule->rule_props ? (is_array($rule->rule_props) ? $rule->rule_props : json_decode($rule->rule_props, true)) : null,
-                        ];
-                    })->toArray(),
-                ];
-            }
-
-            if (!empty($fields)) {
-                $sections[] = [
-                    'section_id' => $section->id,
-                    'section_name' => $section->name,
-                    'fields' => $fields,
-                ];
-            }
-        }
-
-        return [
-            'stage_id' => $stage->id,
-            'stage_name' => $stage->name,
-            'sections' => $sections,
-        ];
-    }
 
     /**
      * Check if section is visible based on conditions
