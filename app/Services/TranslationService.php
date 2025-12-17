@@ -38,6 +38,7 @@ class TranslationService
                         'label' => $field->label,
                         'helper_text' => $field->helper_text,
                         'default_value' => $field->default_value,
+                        'place_holder' => $field->placeholder,
                     ];
                 }
             }
