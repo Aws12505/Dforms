@@ -96,6 +96,8 @@ class EndUserFormController extends Controller
                 'success' => false,
                 'message' => 'Failed to submit initial stage.',
                 'error' => $e->getMessage(),
+                'file' => $e->getFile(),      // ADD THIS
+                'line' => $e->getLine(),
             ], 400);
         }
     }
