@@ -3,6 +3,8 @@
 namespace App\Http\Requests\EndUser;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
+use App\Models\FormVersion;
 
 class SubmitInitialStageRequest extends FormRequest
 {
@@ -15,9 +17,8 @@ class SubmitInitialStageRequest extends FormRequest
     {
         return [
             'form_version_id' => 'required|integer|exists:form_versions,id',
-            'stage_transition_id' => 'nullable|integer|exists:stage_transitions,id', // FIXED: Made nullable
+            'stage_transition_id' => 'nullable|integer|exists:stage_transitions,id',
             'field_values' => 'required|array',
-            // FIXED: Changed structure to match service expectation (fieldId => value)
             'field_values.*' => 'nullable', // Values can be any type
         ];
     }
@@ -33,5 +34,26 @@ class SubmitInitialStageRequest extends FormRequest
             'field_values.required' => 'Field values are required.',
             'field_values.array' => 'Field values must be an array.',
         ];
+    }
+
+    /**
+     * Configure the validator instance.
+     */
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function ($validator) {
+            $formVersionId = $this->input('form_version_id');
+            
+            if ($formVersionId) {
+                $formVersion = FormVersion::find($formVersionId);
+                
+                if ($formVersion && $formVersion->status !== 'published') {
+                    $validator->errors()->add(
+                        'form_version_id',
+                        'Only published form versions can accept submissions.'
+                    );
+                }
+            }
+        });
     }
 }

@@ -3,6 +3,8 @@
 namespace App\Http\Requests\EndUser;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
+use App\Models\Entry;
 
 class SubmitLaterStageRequest extends FormRequest
 {
@@ -11,13 +13,12 @@ class SubmitLaterStageRequest extends FormRequest
         return true;
     }
 
-       public function rules(): array
+    public function rules(): array
     {
         return [
             'public_identifier' => 'required|string|exists:entries,public_identifier',
             'stage_transition_id' => 'required|integer|exists:stage_transitions,id',
             'field_values' => 'required|array',
-            // FIXED: Changed structure to match service expectation (fieldId => value)
             'field_values.*' => 'nullable', // Values can be any type
         ];
     }
@@ -36,4 +37,26 @@ class SubmitLaterStageRequest extends FormRequest
         ];
     }
 
+    /**
+     * Configure the validator instance.
+     */
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function ($validator) {
+            $publicIdentifier = $this->input('public_identifier');
+            
+            if ($publicIdentifier) {
+                $entry = Entry::with('formVersion')
+                    ->where('public_identifier', $publicIdentifier)
+                    ->first();
+                
+                if ($entry && $entry->formVersion && $entry->formVersion->status !== 'published') {
+                    $validator->errors()->add(
+                        'public_identifier',
+                        'Only entries from published form versions can be updated.'
+                    );
+                }
+            }
+        });
+    }
 }

@@ -406,71 +406,98 @@ private function buildStageStructureWithDetails(Stage $stage, array $existingVal
     /**
      * Get entry by public identifier for later stage filling
      */
-    public function getEntryByPublicIdentifier(string $publicIdentifier, ?int $userId = null, ?int $languageId = null): array
-    {
-        $user = $userId ? User::find($userId) : null;
+public function getEntryByPublicIdentifier(string $publicIdentifier, ?int $userId = null, ?int $languageId = null): array
+{
+    $user = $userId ? User::find($userId) : null;
 
-        // FIXED: Determine language before using it
-        if (!$languageId) {
-            $languageId = $user?->default_language_id ?? Language::where('is_default', true)->value('id');
-        }
-
-        $entry = Entry::with([
-            'formVersion.form',
-            'formVersion.translations' => function($q) use ($languageId) {
-                $q->where('language_id', $languageId);
-            },
-            'formVersion.stages.sections.fields.fieldType',
-            'formVersion.stages.sections.fields.rules.inputRule',
-            'formVersion.stages.accessRule',
-            'currentStage',
-            'values.field'
-        ])->where('public_identifier', $publicIdentifier)
-          ->firstOrFail();
-
-        // Load field translations separately
-        $entry->load(['formVersion.stages.sections.fields.translations' => function($q) use ($languageId) {
-            $q->where('language_id', $languageId);
-        }]);
-
-        // Check if user can access the current stage
-        if (!$this->accessCheckService->canUserAccessEntry($entry, $user)) {
-            throw new \Exception('You do not have access to this entry at its current stage.');
-        }
-
-        // Get form translation
-        $formTranslation = $entry->formVersion->translations->first();
-        $formName = $formTranslation ? $formTranslation->name : $entry->formVersion->form->name;
-
-        // Build all stages data (previous stages read-only, current stage editable)
-        $stagesData = [];
-        $allStages = $entry->formVersion->stages()->orderBy('id')->get();
-        $existingValues = $this->getExistingValuesMap($entry);
-
-        foreach ($allStages as $stage) {
-            $isCurrentStage = $stage->id === $entry->current_stage_id;
-            $isPreviousStage = $stage->id < $entry->current_stage_id;
-
-            if ($isCurrentStage || $isPreviousStage) {
-                $stagesData[] = [
-                    'stage_id' => $stage->id,
-                    'stage_name' => $stage->name,
-                    'is_current' => $isCurrentStage,
-                    'is_readonly' => $isPreviousStage,
-                    'structure' => $this->buildStageStructureWithDetails($stage, $existingValues, $languageId),
-                ];
-            }
-        }
-
-        return [
-            'entry_id' => $entry->id,
-            'public_identifier' => $entry->public_identifier,
-            'form_name' => $formName,
-            'is_complete' => $entry->is_complete,
-            'current_stage_id' => $entry->current_stage_id,
-            'stages' => $stagesData,
-        ];
+    // FIXED: Determine language before using it
+    if (!$languageId) {
+        $languageId = $user?->default_language_id ?? Language::where('is_default', true)->value('id');
     }
+
+    $entry = Entry::with([
+        'formVersion.form',
+        'formVersion.translations' => function($q) use ($languageId) {
+            $q->where('language_id', $languageId);
+        },
+        'formVersion.stages.sections.fields.fieldType',
+        'formVersion.stages.sections.fields.rules.inputRule',
+        'formVersion.stages.accessRule',
+        'currentStage',
+        'values.field'
+    ])->where('public_identifier', $publicIdentifier)
+      ->firstOrFail();
+
+    // Load field translations separately
+    $entry->load(['formVersion.stages.sections.fields.translations' => function($q) use ($languageId) {
+        $q->where('language_id', $languageId);
+    }]);
+
+    // Check if user can access the current stage
+    if (!$this->accessCheckService->canUserAccessEntry($entry, $user)) {
+        throw new \Exception('You do not have access to this entry at its current stage.');
+    }
+
+    // Get form translation
+    $formTranslation = $entry->formVersion->translations->first();
+    $formName = $formTranslation ? $formTranslation->name : $entry->formVersion->form->name;
+
+    // Build all stages data (previous stages read-only, current stage editable)
+    $stagesData = [];
+    $allStages = $entry->formVersion->stages()->orderBy('id')->get();
+    $existingValues = $this->getExistingValuesMap($entry);
+
+    foreach ($allStages as $stage) {
+        $isCurrentStage = $stage->id === $entry->current_stage_id;
+        $isPreviousStage = $stage->id < $entry->current_stage_id;
+
+        if ($isCurrentStage || $isPreviousStage) {
+            $stagesData[] = [
+                'stage_id' => $stage->id,
+                'stage_name' => $stage->name,
+                'is_current' => $isCurrentStage,
+                'is_readonly' => $isPreviousStage,
+                'structure' => $this->buildStageStructureWithDetails($stage, $existingValues, $languageId),
+            ];
+        }
+    }
+
+    // Get available transitions from current stage
+    $availableTransitions = [];
+    
+    if (!$entry->is_complete) {
+        $availableTransitions = StageTransition::where('form_version_id', $entry->form_version_id)
+            ->where('from_stage_id', $entry->current_stage_id)
+            ->with(['toStage', 'actions.action'])
+            ->get()
+            ->map(function($transition) {
+                return [
+                    'transition_id' => $transition->id,
+                    'label' => $transition->label,
+                    'to_stage_id' => $transition->to_stage_id,
+                    'to_stage_name' => $transition->toStage ? $transition->toStage->name : null,
+                    'to_complete' => $transition->to_complete,
+                    'condition' => $transition->condition, // FIXED: Removed json_decode - already an array from model cast
+                    'actions' => $transition->actions->map(function($action) {
+                        return [
+                            'action_id' => $action->action_id,
+                            'action_name' => $action->action->name,
+                        ];
+                    })->toArray(),
+                ];
+            })->toArray();
+    }
+
+    return [
+        'entry_id' => $entry->id,
+        'public_identifier' => $entry->public_identifier,
+        'form_name' => $formName,
+        'is_complete' => $entry->is_complete,
+        'current_stage_id' => $entry->current_stage_id,
+        'stages' => $stagesData,
+        'available_transitions' => $availableTransitions,
+    ];
+}
 
     /**
      * Submit later stage of an entry
