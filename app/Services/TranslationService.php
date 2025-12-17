@@ -62,6 +62,7 @@ class TranslationService
                             'label' => $fieldTranslation ? $fieldTranslation->label : '',
                             'helper_text' => $fieldTranslation ? $fieldTranslation->helper_text : '',
                             'default_value' => $fieldTranslation ? $fieldTranslation->default_value : '',
+                            'place_holder' => $fieldTranslation ? $fieldTranslation->placeholder : '',
                         ],
                     ];
                 }
