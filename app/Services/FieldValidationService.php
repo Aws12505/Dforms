@@ -222,34 +222,48 @@ class FieldValidationService
     }
     
     private function validateMin($value, string $fieldType, array $props): array
-    {
-        $min = $props['value'] ?? 0;
-        
-        if (in_array($fieldType, ['Number Input', 'Slider', 'Currency Input', 'Percentage Input', 'Rating'])) {
-            $valid = is_numeric($value) && $value >= $min;
-            $message = "Value must be at least {$min}.";
-        } else {
-            $valid = strlen($value) >= $min;
-            $message = "Must be at least {$min} characters.";
-        }
-        
-        return ['valid' => $valid, 'message' => $valid ? '' : $message];
+{
+    $min = $props['value'] ?? 0;
+    
+    // Skip validation for complex types (arrays/objects)
+    if (is_array($value) || is_object($value)) {
+        return ['valid' => true, 'message' => ''];
     }
     
-    private function validateMax($value, string $fieldType, array $props): array
-    {
-        $max = $props['value'] ?? 0;
-        
-        if (in_array($fieldType, ['Number Input', 'Slider', 'Currency Input', 'Percentage Input', 'Rating'])) {
-            $valid = is_numeric($value) && $value <= $max;
-            $message = "Value must not exceed {$max}.";
-        } else {
-            $valid = strlen($value) <= $max;
-            $message = "Must not exceed {$max} characters.";
-        }
-        
-        return ['valid' => $valid, 'message' => $valid ? '' : $message];
+    if (in_array($fieldType, ['Number Input', 'Slider', 'Currency Input', 'Percentage Input', 'Rating'])) {
+        $valid = is_numeric($value) && $value >= $min;
+        $message = "Value must be at least {$min}.";
+    } else {
+        // Convert to string for length check
+        $value = (string) $value;
+        $valid = strlen($value) >= $min;
+        $message = "Must be at least {$min} characters.";
     }
+    
+    return ['valid' => $valid, 'message' => $valid ? '' : $message];
+}
+
+private function validateMax($value, string $fieldType, array $props): array
+{
+    $max = $props['value'] ?? 0;
+    
+    // Skip validation for complex types (arrays/objects)
+    if (is_array($value) || is_object($value)) {
+        return ['valid' => true, 'message' => ''];
+    }
+    
+    if (in_array($fieldType, ['Number Input', 'Slider', 'Currency Input', 'Percentage Input', 'Rating'])) {
+        $valid = is_numeric($value) && $value <= $max;
+        $message = "Value must not exceed {$max}.";
+    } else {
+        // Convert to string for length check
+        $value = (string) $value;
+        $valid = strlen($value) <= $max;
+        $message = "Must not exceed {$max} characters.";
+    }
+    
+    return ['valid' => $valid, 'message' => $valid ? '' : $message];
+}
     
     private function validateEmail($value): array
     {
