@@ -9,6 +9,8 @@ use App\Models\User;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
+
 
 class ActionExecutionService
 {
@@ -272,32 +274,36 @@ class ActionExecutionService
      * Replace variables in string with entry data
      */
     private function replaceVariables(string $text, Entry $entry): string
-    {
-        $entry->load(['formVersion.form', 'entryValues.field', 'creator']);
-        
-        // Generate entry link using the existing route
-        $entryLink = url("/enduser/entries/{$entry->public_identifier}");
-        
-        $variables = [
-            '{{entry_link}}' => $entryLink,
-            '{{form_name}}' => $entry->formVersion->form->name,
-            '{{user_name}}' => $entry->creator->name ?? 'Unknown',
-            '{{user_email}}' => $entry->creator->email ?? '',
-            '{{entry_id}}' => $entry->id,
-            '{{public_identifier}}' => $entry->public_identifier,
-            '{{current_stage}}' => $entry->currentStage->name ?? '',
-            '{{created_at}}' => $entry->created_at->format('Y-m-d H:i:s'),
-        ];
-        
-        // Add field values as variables
-        foreach ($entry->entryValues as $entryValue) {
-            $fieldLabel = $entryValue->field->label;
-            $fieldKey = '{{field_' . str_replace(' ', '_', strtolower($fieldLabel)) . '}}';
-            $variables[$fieldKey] = $entryValue->value;
-        }
-        
-        return str_replace(array_keys($variables), array_values($variables), $text);
+{
+    $entry->load(['formVersion.form', 'entryValues.field', 'creator']);
+
+    // Generate entry link using the existing route
+    $entryLink = url("/enduser/entries/{$entry->public_identifier}");
+
+    // Get creator or fall back to currently authenticated user
+    $creator = $entry->creator ?? Auth::user();
+
+    $variables = [
+        '{{entry_link}}'        => $entryLink,
+        '{{form_name}}'         => $entry->formVersion->form->name,
+        '{{user_name}}'         => $creator?->name ?? 'Unknown',
+        '{{user_email}}'        => $creator?->email ?? '',
+        '{{entry_id}}'          => $entry->id,
+        '{{public_identifier}}' => $entry->public_identifier,
+        '{{current_stage}}'     => $entry->currentStage->name ?? '',
+        '{{created_at}}'        => $entry->created_at->format('Y-m-d H:i:s'),
+    ];
+
+    // Add field values as variables
+    foreach ($entry->entryValues as $entryValue) {
+        $fieldLabel = $entryValue->field->label;
+        $fieldKey = '{{field_' . str_replace(' ', '_', strtolower($fieldLabel)) . '}}';
+        $variables[$fieldKey] = $entryValue->value;
     }
+
+    return str_replace(array_keys($variables), array_values($variables), $text);
+}
+
     
     /**
      * Replace variables in array recursively
