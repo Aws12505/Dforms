@@ -11,6 +11,7 @@ class FieldTranslation extends Model
         'field_id',
         'language_id',
         'label',
+        'placeholder',
         'helper_text',
         'default_value',
     ];

@@ -22,6 +22,7 @@ class SaveTranslationsRequest extends FormRequest
             'field_translations.*.label' => 'nullable|string|max:255',
             'field_translations.*.helper_text' => 'nullable|string',
             'field_translations.*.default_value' => 'nullable|string',
+            'field_translations.*.placeholder' => 'nullable|string|max:255',
         ];
     }
 
