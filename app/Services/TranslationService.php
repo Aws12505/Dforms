@@ -132,7 +132,7 @@ class TranslationService
                             'label' => $fieldTranslation['label'] ?? '',
                             'helper_text' => $fieldTranslation['helper_text'] ?? '',
                             'default_value' => $fieldTranslation['default_value'] ?? '',
-                            'placeholder' => $fieldTranslation['placeholder'] ?? '',
+                            'placeholder' => $fieldTranslation['place_holder'] ?? '',
                         ]
                     );
                 }
