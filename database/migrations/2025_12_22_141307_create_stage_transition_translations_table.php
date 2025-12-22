@@ -18,7 +18,7 @@ return new class extends Migration
     $table->string('label', 255)->nullable();
     $table->timestamps();
 
-    $table->unique(['stage_transition_id', 'language_id']);
+$table->unique(['stage_transition_id', 'language_id'], 'sttr_stid_lang_unique');
 });
 
     }
