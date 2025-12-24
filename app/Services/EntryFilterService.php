@@ -52,7 +52,7 @@ class EntryFilterService
         $searchType = $filterData['type'] ?? 'contains';
         $searchValue = $filterData['value'] ?? '';
         
-        return $query->whereHas('entryValues', function ($q) use ($fieldId, $searchType, $searchValue) {
+        return $query->whereHas('values', function ($q) use ($fieldId, $searchType, $searchValue) {
             $q->where('field_id', $fieldId);
             
             match($searchType) {
@@ -71,7 +71,7 @@ class EntryFilterService
         $searchType = $filterData['type'] ?? 'contains';
         $searchValue = $filterData['value'] ?? '';
         
-        return $query->whereHas('entryValues', function ($q) use ($fieldId, $searchType, $searchValue) {
+        return $query->whereHas('values', function ($q) use ($fieldId, $searchType, $searchValue) {
             $q->where('field_id', $fieldId);
             
             if ($searchType === 'domain') {
@@ -94,7 +94,7 @@ class EntryFilterService
         $searchType = $filterData['type'] ?? 'contains';
         $searchValue = $filterData['value'] ?? '';
         
-        return $query->whereHas('entryValues', function ($q) use ($fieldId, $searchType, $searchValue) {
+        return $query->whereHas('values', function ($q) use ($fieldId, $searchType, $searchValue) {
             $q->where('field_id', $fieldId);
             
             if ($searchType === 'country_code') {
@@ -105,15 +105,15 @@ class EntryFilterService
         });
     }
     
-    private function filterTextArea(Builder $query, int $fieldId, $filterData): Builder
-    {
-        $keywords = $filterData['keywords'] ?? '';
+    // private function filterTextArea(Builder $query, int $fieldId, $filterData): Builder
+    // {
+    //     $keywords = $filterData['keywords'] ?? '';
         
-        return $query->whereHas('entryValues', function ($q) use ($fieldId, $keywords) {
-            $q->where('field_id', $fieldId)
-              ->where('value', 'like', "%{$keywords}%");
-        });
-    }
+    //     return $query->whereHas('values', function ($q) use ($fieldId, $keywords) {
+    //         $q->where('field_id', $fieldId)
+    //           ->where('value', 'like', "%{$keywords}%");
+    //     });
+    // }
     
     private function filterDateInput(Builder $query, int $fieldId, $filterData): Builder
     {
@@ -138,7 +138,7 @@ class EntryFilterService
             return $query;
         }
         
-        return $query->whereHas('entryValues', function ($q) use ($fieldId, $checked) {
+        return $query->whereHas('values', function ($q) use ($fieldId, $checked) {
             $q->where('field_id', $fieldId);
             
             if ($checked) {
@@ -167,7 +167,7 @@ class EntryFilterService
             return $query;
         }
         
-        return $query->whereHas('entryValues', function ($q) use ($fieldId, $selectedOptions) {
+        return $query->whereHas('values', function ($q) use ($fieldId, $selectedOptions) {
             $q->where('field_id', $fieldId);
             
             // Value might be JSON array of selected options
@@ -190,13 +190,13 @@ class EntryFilterService
             $hasImage = $filterData['value'] ?? true;
             
             if ($hasImage) {
-                return $query->whereHas('entryValues', function ($q) use ($fieldId) {
+                return $query->whereHas('values', function ($q) use ($fieldId) {
                     $q->where('field_id', $fieldId)
                       ->whereNotNull('value')
                       ->where('value', '!=', '');
                 });
             } else {
-                return $query->whereDoesntHave('entryValues', function ($q) use ($fieldId) {
+                return $query->whereDoesntHave('values', function ($q) use ($fieldId) {
                     $q->where('field_id', $fieldId)
                       ->whereNotNull('value')
                       ->where('value', '!=', '');
@@ -215,13 +215,13 @@ class EntryFilterService
             $hasVideo = $filterData['value'] ?? true;
             
             if ($hasVideo) {
-                return $query->whereHas('entryValues', function ($q) use ($fieldId) {
+                return $query->whereHas('values', function ($q) use ($fieldId) {
                     $q->where('field_id', $fieldId)
                       ->whereNotNull('value')
                       ->where('value', '!=', '');
                 });
             } else {
-                return $query->whereDoesntHave('entryValues', function ($q) use ($fieldId) {
+                return $query->whereDoesntHave('values', function ($q) use ($fieldId) {
                     $q->where('field_id', $fieldId)
                       ->whereNotNull('value')
                       ->where('value', '!=', '');
@@ -242,7 +242,7 @@ class EntryFilterService
         $searchType = $filterData['type'] ?? 'contains';
         $searchValue = $filterData['value'] ?? '';
         
-        return $query->whereHas('entryValues', function ($q) use ($fieldId, $searchType, $searchValue) {
+        return $query->whereHas('values', function ($q) use ($fieldId, $searchType, $searchValue) {
             $q->where('field_id', $fieldId);
             
             if ($searchType === 'domain') {
@@ -259,19 +259,19 @@ class EntryFilterService
         return $query;
     }
     
-    private function filterColorPicker(Builder $query, int $fieldId, $filterData): Builder
-    {
-        $colors = $filterData['colors'] ?? [];
+    // private function filterColorPicker(Builder $query, int $fieldId, $filterData): Builder
+    // {
+    //     $colors = $filterData['colors'] ?? [];
         
-        if (empty($colors)) {
-            return $query;
-        }
+    //     if (empty($colors)) {
+    //         return $query;
+    //     }
         
-        return $query->whereHas('entryValues', function ($q) use ($fieldId, $colors) {
-            $q->where('field_id', $fieldId)
-              ->whereIn('value', $colors);
-        });
-    }
+    //     return $query->whereHas('values', function ($q) use ($fieldId, $colors) {
+    //         $q->where('field_id', $fieldId)
+    //           ->whereIn('value', $colors);
+    //     });
+    // }
     
     private function filterRating(Builder $query, int $fieldId, $filterData): Builder
     {
@@ -291,7 +291,7 @@ class EntryFilterService
             return $query;
         }
         
-        return $query->whereHas('entryValues', function ($q) use ($fieldId, $state) {
+        return $query->whereHas('values', function ($q) use ($fieldId, $state) {
             $q->where('field_id', $fieldId);
             
             if ($state === 'on') {
@@ -317,13 +317,13 @@ class EntryFilterService
         $hasSigned = $filterData['has_signature'] ?? true;
         
         if ($hasSigned) {
-            return $query->whereHas('entryValues', function ($q) use ($fieldId) {
+            return $query->whereHas('values', function ($q) use ($fieldId) {
                 $q->where('field_id', $fieldId)
                   ->whereNotNull('value')
                   ->where('value', '!=', '');
             });
         } else {
-            return $query->whereDoesntHave('entryValues', function ($q) use ($fieldId) {
+            return $query->whereDoesntHave('values', function ($q) use ($fieldId) {
                 $q->where('field_id', $fieldId)
                   ->whereNotNull('value')
                   ->where('value', '!=', '');
@@ -331,47 +331,47 @@ class EntryFilterService
         }
     }
     
-    private function filterLocationPicker(Builder $query, int $fieldId, $filterData): Builder
-    {
-        $filterType = $filterData['type'] ?? 'radius';
+    // private function filterLocationPicker(Builder $query, int $fieldId, $filterData): Builder
+    // {
+    //     $filterType = $filterData['type'] ?? 'radius';
         
-        if ($filterType === 'radius') {
-            // Radius search from a center point
-            $centerLat = $filterData['center_lat'] ?? 0;
-            $centerLng = $filterData['center_lng'] ?? 0;
-            $radiusKm = $filterData['radius'] ?? 10;
+    //     if ($filterType === 'radius') {
+    //         // Radius search from a center point
+    //         $centerLat = $filterData['center_lat'] ?? 0;
+    //         $centerLng = $filterData['center_lng'] ?? 0;
+    //         $radiusKm = $filterData['radius'] ?? 10;
             
-            return $query->whereHas('entryValues', function ($q) use ($fieldId, $centerLat, $centerLng, $radiusKm) {
-                $q->where('field_id', $fieldId)
-                  ->whereRaw("
-                      (6371 * acos(cos(radians(?)) * cos(radians(JSON_EXTRACT(value, '$.lat'))) * 
-                      cos(radians(JSON_EXTRACT(value, '$.lng')) - radians(?)) + 
-                      sin(radians(?)) * sin(radians(JSON_EXTRACT(value, '$.lat'))))) <= ?
-                  ", [$centerLat, $centerLng, $centerLat, $radiusKm]);
-            });
-        } elseif ($filterType === 'bounding_box') {
-            // Bounding box search
-            $minLat = $filterData['min_lat'] ?? 0;
-            $maxLat = $filterData['max_lat'] ?? 0;
-            $minLng = $filterData['min_lng'] ?? 0;
-            $maxLng = $filterData['max_lng'] ?? 0;
+    //         return $query->whereHas('values', function ($q) use ($fieldId, $centerLat, $centerLng, $radiusKm) {
+    //             $q->where('field_id', $fieldId)
+    //               ->whereRaw("
+    //                   (6371 * acos(cos(radians(?)) * cos(radians(JSON_EXTRACT(value, '$.lat'))) * 
+    //                   cos(radians(JSON_EXTRACT(value, '$.lng')) - radians(?)) + 
+    //                   sin(radians(?)) * sin(radians(JSON_EXTRACT(value, '$.lat'))))) <= ?
+    //               ", [$centerLat, $centerLng, $centerLat, $radiusKm]);
+    //         });
+    //     } elseif ($filterType === 'bounding_box') {
+    //         // Bounding box search
+    //         $minLat = $filterData['min_lat'] ?? 0;
+    //         $maxLat = $filterData['max_lat'] ?? 0;
+    //         $minLng = $filterData['min_lng'] ?? 0;
+    //         $maxLng = $filterData['max_lng'] ?? 0;
             
-            return $query->whereHas('entryValues', function ($q) use ($fieldId, $minLat, $maxLat, $minLng, $maxLng) {
-                $q->where('field_id', $fieldId)
-                  ->whereRaw("JSON_EXTRACT(value, '$.lat') BETWEEN ? AND ?", [$minLat, $maxLat])
-                  ->whereRaw("JSON_EXTRACT(value, '$.lng') BETWEEN ? AND ?", [$minLng, $maxLng]);
-            });
-        }
+    //         return $query->whereHas('values', function ($q) use ($fieldId, $minLat, $maxLat, $minLng, $maxLng) {
+    //             $q->where('field_id', $fieldId)
+    //               ->whereRaw("JSON_EXTRACT(value, '$.lat') BETWEEN ? AND ?", [$minLat, $maxLat])
+    //               ->whereRaw("JSON_EXTRACT(value, '$.lng') BETWEEN ? AND ?", [$minLng, $maxLng]);
+    //         });
+    //     }
         
-        return $query;
-    }
+    //     return $query;
+    // }
     
     private function filterAddressInput(Builder $query, int $fieldId, $filterData): Builder
     {
         $searchField = $filterData['field'] ?? 'any'; // city, state, country, postal_code, any
         $searchValue = $filterData['value'] ?? '';
         
-        return $query->whereHas('entryValues', function ($q) use ($fieldId, $searchField, $searchValue) {
+        return $query->whereHas('values', function ($q) use ($fieldId, $searchField, $searchValue) {
             $q->where('field_id', $fieldId);
             
             if ($searchField === 'any') {
@@ -392,7 +392,7 @@ class EntryFilterService
         $min = $filterData['min'] ?? 0;
         $max = $filterData['max'] ?? 0;
         
-        return $query->whereHas('entryValues', function ($q) use ($fieldId, $rangeType, $value, $min, $max) {
+        return $query->whereHas('values', function ($q) use ($fieldId, $rangeType, $value, $min, $max) {
             $q->where('field_id', $fieldId);
             
             match($rangeType) {
@@ -414,7 +414,7 @@ class EntryFilterService
         $startDate = $filterData['start_date'] ?? null;
         $endDate = $filterData['end_date'] ?? null;
         
-        return $query->whereHas('entryValues', function ($q) use ($fieldId, $rangeType, $date, $startDate, $endDate) {
+        return $query->whereHas('values', function ($q) use ($fieldId, $rangeType, $date, $startDate, $endDate) {
             $q->where('field_id', $fieldId);
             
             match($rangeType) {
@@ -436,7 +436,7 @@ class EntryFilterService
         $startTime = $filterData['start_time'] ?? null;
         $endTime = $filterData['end_time'] ?? null;
         
-        return $query->whereHas('entryValues', function ($q) use ($fieldId, $rangeType, $time, $startTime, $endTime) {
+        return $query->whereHas('values', function ($q) use ($fieldId, $rangeType, $time, $startTime, $endTime) {
             $q->where('field_id', $fieldId);
             
             match($rangeType) {
@@ -456,7 +456,7 @@ class EntryFilterService
         $startDatetime = $filterData['start_datetime'] ?? null;
         $endDatetime = $filterData['end_datetime'] ?? null;
         
-        return $query->whereHas('entryValues', function ($q) use ($fieldId, $rangeType, $datetime, $startDatetime, $endDatetime) {
+        return $query->whereHas('values', function ($q) use ($fieldId, $rangeType, $datetime, $startDatetime, $endDatetime) {
             $q->where('field_id', $fieldId);
             
             match($rangeType) {
@@ -477,7 +477,7 @@ class EntryFilterService
             return $query;
         }
         
-        return $query->whereHas('entryValues', function ($q) use ($fieldId, $selectedOptions) {
+        return $query->whereHas('values', function ($q) use ($fieldId, $selectedOptions) {
             $q->where('field_id', $fieldId)
               ->whereIn('value', $selectedOptions);
         });
@@ -490,13 +490,13 @@ class EntryFilterService
         
         if ($hasFile !== null) {
             if ($hasFile) {
-                return $query->whereHas('entryValues', function ($q) use ($fieldId) {
+                return $query->whereHas('values', function ($q) use ($fieldId) {
                     $q->where('field_id', $fieldId)
                       ->whereNotNull('value')
                       ->where('value', '!=', '');
                 });
             } else {
-                return $query->whereDoesntHave('entryValues', function ($q) use ($fieldId) {
+                return $query->whereDoesntHave('values', function ($q) use ($fieldId) {
                     $q->where('field_id', $fieldId)
                       ->whereNotNull('value')
                       ->where('value', '!=', '');
@@ -505,7 +505,7 @@ class EntryFilterService
         }
         
         if (!empty($fileTypes)) {
-            return $query->whereHas('entryValues', function ($q) use ($fieldId, $fileTypes) {
+            return $query->whereHas('values', function ($q) use ($fieldId, $fileTypes) {
                 $q->where('field_id', $fieldId);
                 
                 foreach ($fileTypes as $type) {

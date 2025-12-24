@@ -367,10 +367,6 @@ class SuperadminPreProductionSeeder extends Seeder
                 'filter_method_description' => 'Phone search (contains, country code filter)',
             ],
             [
-                'field_type_id' => 5, // Text Area
-                'filter_method_description' => 'Text search (contains keywords)',
-            ],
-            [
                 'field_type_id' => 6, // Date Input
                 'filter_method_description' => 'Date range (equals, before, after, between)',
             ],
@@ -419,10 +415,6 @@ class SuperadminPreProductionSeeder extends Seeder
                 'filter_method_description' => 'URL search (contains, domain filter)',
             ],
             [
-                'field_type_id' => 19, // Color Picker
-                'filter_method_description' => 'Color selection or color range',
-            ],
-            [
                 'field_type_id' => 20, // Rating
                 'filter_method_description' => 'Rating range (equals, greater than, less than)',
             ],
@@ -441,10 +433,6 @@ class SuperadminPreProductionSeeder extends Seeder
             [
                 'field_type_id' => 24, // Percentage Input
                 'filter_method_description' => 'Percentage range (equals, greater than, less than, between)',
-            ],
-            [
-                'field_type_id' => 26, // Location Picker
-                'filter_method_description' => 'Location radius search, bounding box search',
             ],
             [
                 'field_type_id' => 27, // Address Input
