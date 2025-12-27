@@ -37,6 +37,10 @@ class EntryService
             });
         }
         
+        if (array_key_exists('is_considered', $filters) && $filters['is_considered'] !== null) {
+    $query->where('is_considered', $filters['is_considered']);
+}
+
         // Apply field-type-based filters
         if (!empty($filters['field_filters'])) {
             $query = $this->filterService->applyFieldFilters($query, $filters['field_filters']);

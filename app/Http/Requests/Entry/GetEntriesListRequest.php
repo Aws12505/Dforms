@@ -18,6 +18,7 @@ class GetEntriesListRequest extends FormRequest
             'date_from' => 'sometimes|date',
             'date_to' => 'sometimes|date|after_or_equal:date_from',
             'field_filters' => 'sometimes|array',
+            'is_considered' => 'sometimes|boolean',
             'page' => 'sometimes|integer|min:1',
             'per_page' => 'sometimes|integer|min:1|max:100',
         ];
@@ -38,6 +39,21 @@ class GetEntriesListRequest extends FormRequest
             'per_page.integer' => 'Per page must be an integer.',
             'per_page.min' => 'Per page must be at least 1.',
             'per_page.max' => 'Per page cannot exceed 100.',
+            'is_considered.boolean' => 'Considered must be true or false.',
         ];
     }
+
+    protected function prepareForValidation(): void
+{
+    if ($this->has('is_considered')) {
+        $this->merge([
+            'is_considered' => filter_var(
+                $this->input('is_considered'),
+                FILTER_VALIDATE_BOOLEAN,
+                FILTER_NULL_ON_FAILURE
+            ),
+        ]);
+    }
+}
+
 }
